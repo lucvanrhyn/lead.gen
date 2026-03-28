@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CompanyStatus {
+  DISCOVERED
+  ENRICHING
+  READY
+  NEEDS_REVIEW
+  ARCHIVED
+}
+
+enum SourceProvider {
+  GOOGLE_PLACES
+  APOLLO
+  BUILTWITH
+  NEWS_API
+  FIRECRAWL
+  OPENAI
+  SNOV_IO
+  HUNTER
+  MANUAL_SEED
+  SYSTEM
+}
+
+enum EnrichmentStage {
+  GOOGLE_PLACES_DISCOVERY
+  APOLLO_COMPANY_ENRICHMENT
+  APOLLO_PEOPLE_ENRICHMENT
+  FIRECRAWL_EXTRACTION
+  PAIN_HYPOTHESIS_GENERATION
+  LEAD_SCORING
+  LEAD_MAGNET_GENERATION
+  OUTREACH_GENERATION
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+  CANCELLED
+}
+
+enum CrawlPageType {
+  HOMEPAGE
+  SERVICES
+  ABOUT
+  CONTACT
+  PRICING
+  BLOG
+  NEWS
+  REVIEWS
+  OTHER
+}
+
+model Company {
+  id                   String           @id @default(cuid())
+  name                 String
+  website              String?
+  normalizedDomain     String?          @map("normalized_domain")
+  industry             String?
+  employeeCount        Int?             @map("employee_count")
+  description          String?
+  locationSummary      String?          @map("location_summary")
+  googlePlaceId        String?          @unique @map("google_place_id")
+  apolloOrganizationId String?          @unique @map("apollo_organization_id")
+  status               CompanyStatus    @default(DISCOVERED)
+  manualReviewRequired Boolean          @default(false) @map("manual_review_required")
+  sourceConfidence     Float?           @map("source_confidence")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  contacts             Contact[]
+  locations            CompanyLocation[]
+  technologyProfiles   TechnologyProfile[]
+  newsMentions         NewsMention[]
+  crawlPages           CrawlPage[]
+  painHypotheses       PainHypothesis[]
+  leadScores           LeadScore[]
+  leadMagnets          LeadMagnet[]
+  outreachDrafts       OutreachDraft[]
+  sourceEvents         SourceEvent[]
+  enrichmentJobs       EnrichmentJob[]
+
+  @@index([name])
+  @@index([normalizedDomain])
+  @@index([status])
+  @@map("companies")
+}
+
+model Contact {
+  id                     String        @id @default(cuid())
+  companyId              String        @map("company_id")
+  fullName               String        @map("full_name")
+  firstName              String?       @map("first_name")
+  lastName               String?       @map("last_name")
+  title                  String?
+  email                  String?
+  phone                  String?
+  department             String?
+  seniority              String?
+  apolloPersonId         String?       @unique @map("apollo_person_id")
+  decisionMakerConfidence Float?       @map("decision_maker_confidence")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+  company                Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  outreachDrafts         OutreachDraft[]
+  sourceEvents           SourceEvent[]
+
+  @@index([companyId])
+  @@index([email])
+  @@map("contacts")
+}
+
+model CompanyLocation {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  label       String?
+  country     String?
+  region      String?
+  city        String?
+  postalCode  String?  @map("postal_code")
+  latitude    Float?
+  longitude   Float?
+  isPrimary   Boolean  @default(false) @map("is_primary")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("company_locations")
+}
+
+model TechnologyProfile {
+  id             String         @id @default(cuid())
+  companyId      String         @map("company_id")
+  provider       SourceProvider
+  technologyName String         @map("technology_name")
+  category       String?
+  evidenceUrl    String?        @map("evidence_url")
+  confidence     Float?
+  rawPayload     Json?          @map("raw_payload")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("technology_profiles")
+}
+
+model NewsMention {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  title       String
+  summary     String?
+  sourceName  String?  @map("source_name")
+  articleUrl  String   @map("article_url")
+  publishedAt DateTime? @map("published_at")
+  confidence  Float?
+  rawPayload  Json?    @map("raw_payload")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("news_mentions")
+}
+
+model CrawlPage {
+  id          String        @id @default(cuid())
+  companyId   String        @map("company_id")
+  provider    SourceProvider
+  pageType    CrawlPageType @map("page_type")
+  url         String
+  title       String?
+  markdown    String?
+  html        String?
+  summary     String?
+  confidence  Float?
+  extractedAt DateTime?     @map("extracted_at")
+  rawPayload  Json?         @map("raw_payload")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([pageType])
+  @@map("crawl_pages")
+}
+
+model PainHypothesis {
+  id                        String   @id @default(cuid())
+  companyId                 String   @map("company_id")
+  primaryPain               String   @map("primary_pain")
+  secondaryPains            Json     @map("secondary_pains")
+  evidence                  Json
+  businessImpact            String   @map("business_impact")
+  confidenceScore           Float    @map("confidence_score")
+  recommendedServiceAngle   String   @map("recommended_service_angle")
+  recommendedLeadMagnetType String   @map("recommended_lead_magnet_type")
+  insufficientEvidence      Boolean  @default(false) @map("insufficient_evidence")
+  modelProvider             SourceProvider? @map("model_provider")
+  modelName                 String?  @map("model_name")
+  rawPayload                Json?    @map("raw_payload")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+  company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("pain_hypotheses")
+}
+
+model LeadScore {
+  id              String   @id @default(cuid())
+  companyId       String   @map("company_id")
+  totalScore      Int      @map("total_score")
+  componentScores Json     @map("component_scores")
+  explanation     String
+  modelProvider   SourceProvider? @map("model_provider")
+  modelName       String?  @map("model_name")
+  rawPayload      Json?    @map("raw_payload")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("lead_scores")
+}
+
+model LeadMagnet {
+  id                      String   @id @default(cuid())
+  companyId               String   @map("company_id")
+  title                   String
+  type                    String
+  summary                 String
+  whyItMatchesTheLead     String   @map("why_it_matches_the_lead")
+  suggestedDeliveryFormat String   @map("suggested_delivery_format")
+  estimatedTimeToPrepare  String   @map("estimated_time_to_prepare")
+  rawPayload              Json?    @map("raw_payload")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("lead_magnets")
+}
+
+model OutreachDraft {
+  id                String   @id @default(cuid())
+  companyId         String   @map("company_id")
+  contactId         String?  @map("contact_id")
+  emailSubject1     String   @map("email_subject_1")
+  emailSubject2     String   @map("email_subject_2")
+  coldEmailShort    String   @map("cold_email_short")
+  coldEmailMedium   String   @map("cold_email_medium")
+  linkedinMessageSafe String @map("linkedin_message_safe")
+  followUp1         String   @map("follow_up_1")
+  followUp2         String   @map("follow_up_2")
+  rawPayload        Json?    @map("raw_payload")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact           Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([contactId])
+  @@map("outreach_drafts")
+}
+
+model SourceEvent {
+  id         String         @id @default(cuid())
+  companyId  String?        @map("company_id")
+  contactId  String?        @map("contact_id")
+  provider   SourceProvider
+  eventType  String         @map("event_type")
+  fieldName  String?        @map("field_name")
+  sourceUrl  String?        @map("source_url")
+  snippet    String?
+  confidence Float?
+  payload    Json?
+  createdAt  DateTime       @default(now()) @map("created_at")
+  company    Company?       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact    Contact?       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([provider])
+  @@map("source_events")
+}
+
+model EnrichmentJob {
+  id            String          @id @default(cuid())
+  companyId     String?         @map("company_id")
+  provider      SourceProvider?
+  stage         EnrichmentStage
+  status        JobStatus       @default(PENDING)
+  attempts      Int             @default(0)
+  requestedBy   String?         @map("requested_by")
+  lastError     String?         @map("last_error")
+  payload       Json?
+  resultSummary Json?           @map("result_summary")
+  runAt         DateTime?       @map("run_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  company       Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([stage])
+  @@index([status])
+  @@map("enrichment_jobs")
+}
