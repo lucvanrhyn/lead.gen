@@ -46,13 +46,33 @@ export function buildLeadMagnet(input: {
   });
 }
 
+function slugifySegment(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+export function buildLeadMagnetAssetSlug(input: {
+  companyName: string;
+  leadMagnetTitle: string;
+  outreachDraftId: string;
+}) {
+  const companySegment = slugifySegment(input.companyName);
+  const leadMagnetSegment = slugifySegment(input.leadMagnetTitle);
+  const idSegment = slugifySegment(input.outreachDraftId).slice(0, 12);
+
+  return [companySegment, leadMagnetSegment, idSegment].filter(Boolean).join("-");
+}
+
 export async function persistLeadMagnet(
   companyId: string,
   leadMagnet: z.infer<typeof leadMagnetSchema>,
 ) {
   const { db } = await import("@/lib/db");
 
-  await db.leadMagnet.create({
+  const record = await db.leadMagnet.create({
     data: {
       companyId,
       title: leadMagnet.title,
@@ -76,6 +96,45 @@ export async function persistLeadMagnet(
       resultSummary: {
         lead_magnet_type: leadMagnet.type,
       },
+    },
+  });
+
+  return record;
+}
+
+export async function persistLeadMagnetAsset(input: {
+  companyId: string;
+  leadMagnetId: string;
+  outreachDraftId: string;
+  companyName: string;
+  leadMagnetTitle: string;
+  leadMagnetSummary: string;
+  diagnosticFormUrl?: string | null;
+}) {
+  const { db } = await import("@/lib/db");
+  const slug = buildLeadMagnetAssetSlug({
+    companyName: input.companyName,
+    leadMagnetTitle: input.leadMagnetTitle,
+    outreachDraftId: input.outreachDraftId,
+  });
+
+  return db.leadMagnetAsset.upsert({
+    where: { outreachDraftId: input.outreachDraftId },
+    create: {
+      companyId: input.companyId,
+      leadMagnetId: input.leadMagnetId,
+      outreachDraftId: input.outreachDraftId,
+      slug,
+      headline: input.leadMagnetTitle,
+      intro: input.leadMagnetSummary,
+      diagnosticFormUrl: input.diagnosticFormUrl ?? undefined,
+    },
+    update: {
+      slug,
+      headline: input.leadMagnetTitle,
+      intro: input.leadMagnetSummary,
+      diagnosticFormUrl: input.diagnosticFormUrl ?? undefined,
+      status: "ACTIVE",
     },
   });
 }

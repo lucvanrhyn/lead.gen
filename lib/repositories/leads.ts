@@ -91,6 +91,7 @@ export async function getApprovalQueue(): Promise<{
         },
         gmailDraftLink: true,
         sheetSyncRecords: {
+          where: { tabName: "Drafts" },
           orderBy: { createdAt: "desc" },
           take: 1,
         },
@@ -188,11 +189,16 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         leadMagnets: {
           orderBy: { createdAt: "desc" },
         },
+        leadMagnetAssets: {
+          orderBy: { createdAt: "desc" },
+        },
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
           include: {
             gmailDraftLink: true,
+            leadMagnetAsset: true,
             sheetSyncRecords: {
+              where: { tabName: "Drafts" },
               orderBy: { createdAt: "desc" },
               take: 1,
             },
@@ -267,6 +273,21 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         whyItMatchesTheLead: leadMagnet.whyItMatchesTheLead,
         suggestedDeliveryFormat: leadMagnet.suggestedDeliveryFormat,
       })),
+      leadMagnetAssets: company.leadMagnetAssets.map((asset) => ({
+        id: asset.id,
+        slug: asset.slug,
+        assetPath: `/assets/${asset.slug}`,
+        headline: asset.headline,
+        intro: asset.intro,
+        status: asset.status,
+        viewCount: asset.viewCount,
+        firstViewedAtLabel: asset.firstViewedAt ? formatDateTime(asset.firstViewedAt) : undefined,
+        lastViewedAtLabel: asset.lastViewedAt ? formatDateTime(asset.lastViewedAt) : undefined,
+        followUpCreatedAtLabel: asset.followUpCreatedAt
+          ? formatDateTime(asset.followUpCreatedAt)
+          : undefined,
+        diagnosticFormUrl: asset.diagnosticFormUrl ?? undefined,
+      })),
       outreachDrafts: company.outreachDrafts.map((draft) => ({
         id: draft.id,
         emailSubject1: draft.emailSubject1,
@@ -279,6 +300,10 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         approvalStatus: draft.approvalStatus,
         gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
         sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
+        assetPath: draft.leadMagnetAsset?.slug
+          ? `/assets/${draft.leadMagnetAsset.slug}`
+          : undefined,
+        diagnosticFormUrl: draft.leadMagnetAsset?.diagnosticFormUrl ?? undefined,
       })),
       engagementEvents: company.engagementEvents.map((event) => ({
         id: event.id,

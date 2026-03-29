@@ -25,6 +25,9 @@ export async function POST(
       diagnosticForms: {
         orderBy: { createdAt: "desc" },
         take: 1,
+        include: {
+          formLink: true,
+        },
       },
     },
   });
@@ -39,16 +42,14 @@ export async function POST(
   const latestPain = company.painHypotheses[0];
   const latestLeadMagnet = company.leadMagnets[0];
   const latestForm = company.diagnosticForms[0];
-  const contacts =
-    company.contacts.length > 0
-      ? company.contacts
-      : [
-          {
-            id: undefined,
-            firstName: null,
-            fullName: null,
-          },
-        ];
+  const contacts = company.contacts.filter((contact) => Boolean(contact.email));
+
+  if (contacts.length === 0) {
+    return NextResponse.json(
+      { error: "No valid contacts with email were available for outreach drafts." },
+      { status: 422 },
+    );
+  }
 
   const drafts = [];
 
@@ -71,14 +72,22 @@ export async function POST(
     await persistOutreachDraft({
       companyId: company.id,
       companyName: company.name,
-      leadMagnetTitle: latestLeadMagnet.title,
+      leadMagnet: {
+        id: latestLeadMagnet.id,
+        title: latestLeadMagnet.title,
+        summary: latestLeadMagnet.summary,
+        whyItMatchesTheLead: latestLeadMagnet.whyItMatchesTheLead,
+        suggestedDeliveryFormat: latestLeadMagnet.suggestedDeliveryFormat,
+      },
       outreach,
+      diagnosticFormUrl: latestForm?.formLink?.url ?? null,
       contact: {
         id: contact.id,
         fullName: contact.fullName,
         title: "title" in contact ? contact.title : undefined,
       },
     });
+
     drafts.push(outreach);
   }
 

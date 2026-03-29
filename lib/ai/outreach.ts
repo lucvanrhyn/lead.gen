@@ -1,6 +1,8 @@
 import { EnrichmentStage, JobStatus, SourceProvider } from "@prisma/client";
 import { z } from "zod";
 
+import { persistLeadMagnetAsset } from "@/lib/ai/lead-magnet";
+
 export const outreachSchema = z.object({
   email_subject_1: z.string(),
   email_subject_2: z.string(),
@@ -150,8 +152,15 @@ export async function persistOutreachDraft(
   input: {
     companyId: string;
     companyName: string;
-    leadMagnetTitle: string;
+    leadMagnet: {
+      id: string;
+      title: string;
+      summary: string;
+      whyItMatchesTheLead: string;
+      suggestedDeliveryFormat: string;
+    };
     outreach: z.infer<typeof outreachSchema>;
+    diagnosticFormUrl?: string | null;
     contact?: {
       id?: string;
       fullName?: string | null;
@@ -159,7 +168,7 @@ export async function persistOutreachDraft(
     };
   },
 ) {
-  const { companyId, companyName, leadMagnetTitle, outreach, contact } = input;
+  const { companyId, companyName, leadMagnet, outreach, contact, diagnosticFormUrl } = input;
   const { db } = await import("@/lib/db");
 
   const draft = await db.outreachDraft.create({
@@ -178,11 +187,21 @@ export async function persistOutreachDraft(
     },
   });
 
+  await persistLeadMagnetAsset({
+    companyId,
+    leadMagnetId: leadMagnet.id,
+    outreachDraftId: draft.id,
+    companyName,
+    leadMagnetTitle: leadMagnet.title,
+    leadMagnetSummary: leadMagnet.summary,
+    diagnosticFormUrl,
+  });
+
   const linkedInTask = buildLinkedInTask({
     companyName,
     contactName: contact?.fullName ?? undefined,
     contactTitle: contact?.title ?? undefined,
-    leadMagnetTitle,
+    leadMagnetTitle: leadMagnet.title,
     linkedinMessageSafe: outreach.linkedin_message_safe,
     followUp2: outreach.follow_up_2,
   });
@@ -216,4 +235,6 @@ export async function persistOutreachDraft(
       },
     },
   });
+
+  return draft;
 }

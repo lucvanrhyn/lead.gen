@@ -8,6 +8,27 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
+  const existingDraft = await db.outreachDraft.findUnique({
+    where: { id },
+    include: {
+      contact: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!existingDraft) {
+    return NextResponse.json({ error: "Outreach draft not found." }, { status: 404 });
+  }
+
+  const connection = await db.googleWorkspaceConnection.findUnique({
+    where: { provider: "google_workspace" },
+    select: {
+      status: true,
+    },
+  });
 
   const draft = await db.outreachDraft.update({
     where: { id },
@@ -17,18 +38,24 @@ export async function POST(
     },
   });
 
+  const isGmailReady = Boolean(existingDraft.contact?.email) && connection?.status === "CONNECTED";
+  const syncStatus = isGmailReady ? ExternalSyncStatus.READY : ExternalSyncStatus.NOT_READY;
+
   await db.gmailDraftLink.upsert({
     where: { outreachDraftId: id },
     create: {
       outreachDraftId: id,
       gmailDraftId: `pending-${id}`,
-      syncStatus: ExternalSyncStatus.READY,
+      syncStatus,
     },
     update: {
-      syncStatus: ExternalSyncStatus.READY,
+      syncStatus,
       lastSyncedAt: null,
     },
   });
 
-  return NextResponse.json(draft);
+  return NextResponse.json({
+    ...draft,
+    gmailReady: isGmailReady,
+  });
 }

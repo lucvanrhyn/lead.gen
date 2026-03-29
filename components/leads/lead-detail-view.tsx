@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -236,7 +237,10 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                     <button
                       key={`${draft.id}-${eventType}`}
                       className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
-                      disabled={pendingEngagementDraftId === draft.id}
+                      disabled={
+                        pendingEngagementDraftId === draft.id ||
+                        draft.gmailSyncStatus !== "SYNCED"
+                      }
                       onClick={() => handleEngagement(draft.id, eventType)}
                       type="button"
                     >
@@ -244,6 +248,11 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                     </button>
                   ))}
                 </div>
+                {draft.gmailSyncStatus !== "SYNCED" ? (
+                  <p className="mt-3 text-sm text-[rgba(245,235,212,0.62)]">
+                    Engagement logging unlocks after this draft has been synced to Gmail.
+                  </p>
+                ) : null}
               </article>
             ))}
 
@@ -256,6 +265,58 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
 
         {activeTab === "outreach" ? (
           <div className="grid gap-4">
+            {(lead.leadMagnetAssets ?? []).length > 0 ? (
+              (lead.leadMagnetAssets ?? []).map((asset) => (
+                <article
+                  key={asset.id}
+                  className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-2">
+                      <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                        Hosted asset
+                      </p>
+                      <h2 className="font-display text-2xl text-cream">{asset.headline}</h2>
+                      <p className="text-sm leading-7 text-[rgba(245,235,212,0.72)]">{asset.intro}</p>
+                      <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-[rgba(245,235,212,0.72)]">
+                        <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1">
+                          Views {asset.viewCount}
+                        </span>
+                        <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1">
+                          {asset.status.replaceAll("_", " ")}
+                        </span>
+                        {asset.followUpCreatedAtLabel ? (
+                          <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1">
+                            Follow-up locked {asset.followUpCreatedAtLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <Link
+                      className="inline-flex items-center justify-center rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream transition hover:bg-[rgba(255,255,255,0.04)]"
+                      href={asset.assetPath}
+                    >
+                      Open asset page
+                    </Link>
+                  </div>
+                  <div className="mt-4 grid gap-2 text-sm text-[rgba(245,235,212,0.72)]">
+                    {asset.firstViewedAtLabel ? <p>First viewed: {asset.firstViewedAtLabel}</p> : null}
+                    {asset.lastViewedAtLabel ? <p>Last viewed: {asset.lastViewedAtLabel}</p> : null}
+                    {asset.diagnosticFormUrl ? (
+                      <p>
+                        Diagnostic form:{" "}
+                        <a className="underline decoration-[rgba(210,180,140,0.3)]" href={asset.diagnosticFormUrl}>
+                          {asset.diagnosticFormUrl}
+                        </a>
+                      </p>
+                    ) : null}
+                  </div>
+                </article>
+              ))
+            ) : (
+              <EmptyPanel message="No hosted lead-magnet assets generated yet." />
+            )}
             {lead.leadMagnets.length > 0 ? (
               lead.leadMagnets.map((leadMagnet) => (
                 <DetailCard
@@ -284,7 +345,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               lead.outreachDrafts.map((draft) => (
                 <DetailCard
                   key={draft.id}
-                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\nFollow-up: ${draft.followUp1}\n\nSequence: ${draft.sequenceStep} • ${draft.draftType.replaceAll("_", " ")}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
+                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\n${draft.assetPath ? `Hosted asset: ${draft.assetPath}\n\n` : ""}${draft.diagnosticFormUrl ? `Diagnostic form: ${draft.diagnosticFormUrl}\n\n` : ""}Follow-up: ${draft.followUp1}\n\nSequence: ${draft.sequenceStep} • ${draft.draftType.replaceAll("_", " ")}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
                   label={`${draft.emailSubject2} • ${draft.approvalStatus.replaceAll("_", " ")}`}
                   title={draft.emailSubject1}
                 />
@@ -292,6 +353,27 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             ) : (
               <EmptyPanel message="No outreach drafts generated yet." />
             )}
+            {lead.outreachDrafts.some((draft) => draft.assetPath) ? (
+              <div className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5">
+                <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                  Hosted assets
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {lead.outreachDrafts
+                    .filter((draft) => draft.assetPath)
+                    .map((draft) => (
+                      <Link
+                        key={`${draft.id}-asset`}
+                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream"
+                        href={draft.assetPath ?? "#"}
+                        target="_blank"
+                      >
+                        Open asset for {draft.emailSubject1}
+                      </Link>
+                    ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

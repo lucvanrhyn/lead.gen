@@ -89,6 +89,19 @@ export type LeadDetailViewModel = {
     whyItMatchesTheLead: string;
     suggestedDeliveryFormat: string;
   }>;
+  leadMagnetAssets?: Array<{
+    id: string;
+    slug: string;
+    assetPath: string;
+    headline: string;
+    intro: string;
+    status: string;
+    viewCount: number;
+    firstViewedAtLabel?: string;
+    lastViewedAtLabel?: string;
+    followUpCreatedAtLabel?: string;
+    diagnosticFormUrl?: string;
+  }>;
   outreachDrafts: Array<{
     id: string;
     emailSubject1: string;
@@ -101,6 +114,8 @@ export type LeadDetailViewModel = {
     approvalStatus: string;
     gmailSyncStatus: string;
     sheetSyncStatus: string;
+    assetPath?: string;
+    diagnosticFormUrl?: string;
   }>;
   engagementEvents: Array<{
     id: string;

@@ -94,6 +94,11 @@ enum EngagementEventType {
   REPLY
 }
 
+enum LeadMagnetAssetStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 enum CrawlPageType {
   HOMEPAGE
   SERVICES
@@ -131,6 +136,7 @@ model Company {
   painHypotheses       PainHypothesis[]
   leadScores           LeadScore[]
   leadMagnets          LeadMagnet[]
+  leadMagnetAssets     LeadMagnetAsset[]
   outreachDrafts       OutreachDraft[]
   linkedinTasks        LinkedInTask[]
   engagementEvents     OutreachEngagementEvent[]
@@ -300,6 +306,7 @@ model LeadMagnet {
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
   company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assets                  LeadMagnetAsset[]
 
   @@index([companyId])
   @@map("lead_magnets")
@@ -333,13 +340,41 @@ model OutreachDraft {
   parentDraft       OutreachDraft? @relation("OutreachDraftFollowUps", fields: [parentDraftId], references: [id], onDelete: SetNull)
   childDrafts       OutreachDraft[] @relation("OutreachDraftFollowUps")
   engagementEvents  OutreachEngagementEvent[]
+  leadMagnetAsset   LeadMagnetAsset?
 
   @@index([companyId])
   @@index([contactId])
   @@index([approvalStatus])
   @@index([draftType])
   @@index([parentDraftId])
+  @@unique([parentDraftId, draftType, sequenceStep])
   @@map("outreach_drafts")
+}
+
+model LeadMagnetAsset {
+  id                String                @id @default(cuid())
+  companyId         String                @map("company_id")
+  leadMagnetId      String                @map("lead_magnet_id")
+  outreachDraftId   String                @unique @map("outreach_draft_id")
+  slug              String                @unique
+  headline          String
+  intro             String
+  diagnosticFormUrl String?               @map("diagnostic_form_url")
+  status            LeadMagnetAssetStatus @default(ACTIVE)
+  viewCount         Int                   @default(0) @map("view_count")
+  firstViewedAt     DateTime?             @map("first_viewed_at")
+  lastViewedAt      DateTime?             @map("last_viewed_at")
+  followUpCreatedAt DateTime?             @map("follow_up_created_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+  company           Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leadMagnet        LeadMagnet            @relation(fields: [leadMagnetId], references: [id], onDelete: Cascade)
+  outreachDraft     OutreachDraft         @relation(fields: [outreachDraftId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([leadMagnetId])
+  @@index([status])
+  @@map("lead_magnet_assets")
 }
 
 model OutreachEngagementEvent {

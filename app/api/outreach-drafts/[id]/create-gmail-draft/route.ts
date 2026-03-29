@@ -2,7 +2,10 @@ import { ExternalSyncStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { createGoogleWorkspaceGmailDraft } from "@/lib/providers/google-workspace/gmail";
+import {
+  appendOutreachDeliveryLinks,
+  createGoogleWorkspaceGmailDraft,
+} from "@/lib/providers/google-workspace/gmail";
 import { createAuthorizedGoogleClient } from "@/lib/providers/google-workspace/oauth";
 
 export async function POST(
@@ -16,6 +19,7 @@ export async function POST(
     include: {
       contact: true,
       gmailDraftLink: true,
+      leadMagnetAsset: true,
     },
   });
 
@@ -58,11 +62,18 @@ export async function POST(
 
   try {
     const auth = await createAuthorizedGoogleClient(connection);
+    const assetUrl = draft.leadMagnetAsset?.slug
+      ? new URL(`/assets/${draft.leadMagnetAsset.slug}`, _request.url).toString()
+      : null;
     const gmailDraft = await createGoogleWorkspaceGmailDraft({
       auth,
       to: draft.contact.email,
       subject: draft.emailSubject1,
-      body: draft.coldEmailMedium,
+      body: appendOutreachDeliveryLinks({
+        body: draft.coldEmailMedium,
+        assetUrl,
+        diagnosticFormUrl: draft.leadMagnetAsset?.diagnosticFormUrl ?? null,
+      }),
     });
 
     const record = await db.gmailDraftLink.upsert({

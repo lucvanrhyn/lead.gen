@@ -6,6 +6,7 @@ import {
   SourceProvider,
 } from "@prisma/client";
 
+import { buildLeadMagnetAssetSlug } from "../lib/ai/lead-magnet";
 import { createPrismaClient } from "../lib/database-connection";
 import { companySeedGraphSchema } from "../lib/domain/lead-records";
 
@@ -43,6 +44,7 @@ async function main() {
   await prisma.outreachEngagementEvent.deleteMany();
   await prisma.batchLead.deleteMany();
   await prisma.leadBatch.deleteMany();
+  await prisma.leadMagnetAsset.deleteMany();
   await prisma.outreachDraft.deleteMany();
   await prisma.leadMagnet.deleteMany();
   await prisma.leadScore.deleteMany();
@@ -207,10 +209,12 @@ async function main() {
     },
     include: {
       contacts: true,
+      leadMagnets: true,
     },
   });
 
   if (company.contacts[0]) {
+    const leadMagnet = company.leadMagnets[0];
     const pendingDraft = await prisma.outreachDraft.create({
       data: {
         companyId: company.id,
@@ -230,6 +234,23 @@ async function main() {
         approvalStatus: "PENDING_APPROVAL",
       },
     });
+
+    if (leadMagnet) {
+      await prisma.leadMagnetAsset.create({
+        data: {
+          companyId: company.id,
+          leadMagnetId: leadMagnet.id,
+          outreachDraftId: pendingDraft.id,
+          slug: buildLeadMagnetAssetSlug({
+            companyName: company.name,
+            leadMagnetTitle: leadMagnet.title,
+            outreachDraftId: pendingDraft.id,
+          }),
+          headline: leadMagnet.title,
+          intro: leadMagnet.summary,
+        },
+      });
+    }
 
     await prisma.linkedInTask.create({
       data: {
@@ -283,13 +304,39 @@ async function main() {
       },
     });
 
-    await prisma.sheetSyncRecord.create({
-      data: {
-        outreachDraftId: approvedDraft.id,
-        tabName: "Drafts",
-        rowKey: "draft-demo-1",
-        syncStatus: "READY",
-      },
+    await prisma.sheetSyncRecord.createMany({
+      data: [
+        {
+          outreachDraftId: approvedDraft.id,
+          tabName: "Companies",
+          rowKey: "2",
+          syncStatus: "READY",
+        },
+        {
+          outreachDraftId: approvedDraft.id,
+          tabName: "Contacts",
+          rowKey: "2",
+          syncStatus: "READY",
+        },
+        {
+          outreachDraftId: approvedDraft.id,
+          tabName: "Drafts",
+          rowKey: "2",
+          syncStatus: "READY",
+        },
+        {
+          outreachDraftId: approvedDraft.id,
+          tabName: "LinkedIn Tasks",
+          rowKey: "2",
+          syncStatus: "READY",
+        },
+        {
+          outreachDraftId: approvedDraft.id,
+          tabName: "Engagement",
+          rowKey: "2",
+          syncStatus: "READY",
+        },
+      ],
     });
 
     await prisma.linkedInTask.create({
@@ -331,6 +378,24 @@ async function main() {
         approvalStatus: "PENDING_APPROVAL",
       },
     });
+
+    if (leadMagnet) {
+      await prisma.leadMagnetAsset.create({
+        data: {
+          companyId: company.id,
+          leadMagnetId: leadMagnet.id,
+          outreachDraftId: approvedDraft.id,
+          slug: buildLeadMagnetAssetSlug({
+            companyName: company.name,
+            leadMagnetTitle: leadMagnet.title,
+            outreachDraftId: approvedDraft.id,
+          }),
+          headline: leadMagnet.title,
+          intro: leadMagnet.summary,
+          diagnosticFormUrl: "https://forms.gle/example-atlas-dental",
+        },
+      });
+    }
 
     await prisma.outreachEngagementEvent.create({
       data: {

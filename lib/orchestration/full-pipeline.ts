@@ -175,7 +175,7 @@ export async function runCompanyFullPipeline(companyId: string) {
       recommendedServiceAngle: painHypothesis.recommended_service_angle,
       insufficientEvidence: painHypothesis.insufficient_evidence,
     });
-    await persistLeadMagnet(companyId, leadMagnet);
+    const persistedLeadMagnet = await persistLeadMagnet(companyId, leadMagnet);
     stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED });
 
     const persistedPain = await db.painHypothesis.findFirst({
@@ -197,16 +197,20 @@ export async function runCompanyFullPipeline(companyId: string) {
     });
     stages.push({ stage: "diagnostic-form", status: JobStatus.SUCCEEDED });
 
-    const contacts =
-      companyWithEvidence.contacts.length > 0
-        ? companyWithEvidence.contacts
-        : [
-            {
-              id: undefined,
-              firstName: null,
-              fullName: null,
-            },
-          ];
+    const contacts = companyWithEvidence.contacts.filter((contact) => Boolean(contact.email));
+
+    if (contacts.length === 0) {
+      stages.push({
+        stage: "outreach",
+        status: JobStatus.PARTIAL,
+        error: "No valid contacts with email were available for draft generation.",
+      });
+
+      return {
+        status: JobStatus.PARTIAL,
+        stages,
+      };
+    }
 
     for (const contact of contacts) {
       const outreach = buildOutreachDraft({
@@ -225,7 +229,13 @@ export async function runCompanyFullPipeline(companyId: string) {
       await persistOutreachDraft({
         companyId,
         companyName: companyWithEvidence.name,
-        leadMagnetTitle: leadMagnet.title,
+        leadMagnet: {
+          id: persistedLeadMagnet.id,
+          title: persistedLeadMagnet.title,
+          summary: persistedLeadMagnet.summary,
+          whyItMatchesTheLead: persistedLeadMagnet.whyItMatchesTheLead,
+          suggestedDeliveryFormat: persistedLeadMagnet.suggestedDeliveryFormat,
+        },
         outreach,
         contact: {
           id: contact.id,

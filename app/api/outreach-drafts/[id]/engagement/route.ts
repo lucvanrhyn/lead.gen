@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { ApprovalStatus, EngagementEventType, OutreachDraftType } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -33,6 +34,11 @@ export async function POST(
           where: { draftType: OutreachDraftType.FOLLOW_UP },
           take: 1,
         },
+        gmailDraftLink: {
+          select: {
+            syncStatus: true,
+          },
+        },
       },
     });
 
@@ -50,20 +56,27 @@ export async function POST(
       );
     }
 
+    if (draft.gmailDraftLink?.syncStatus !== "SYNCED") {
+      return NextResponse.json(
+        { error: "Engagement can only be logged after the draft has been synced to Gmail." },
+        { status: 409 },
+      );
+    }
+
     const shouldCreateFollowUp =
       input.eventType !== EngagementEventType.REPLY && draft.childDrafts.length === 0;
 
-    const event = await db.outreachEngagementEvent.create({
-      data: {
-        outreachDraftId: draft.id,
-        companyId: draft.companyId,
-        contactId: draft.contactId,
-        eventType: input.eventType,
-        followUpCreated: shouldCreateFollowUp,
-      },
-    });
-
     if (!shouldCreateFollowUp) {
+      const event = await db.outreachEngagementEvent.create({
+        data: {
+          outreachDraftId: draft.id,
+          companyId: draft.companyId,
+          contactId: draft.contactId,
+          eventType: input.eventType,
+          followUpCreated: false,
+        },
+      });
+
       return NextResponse.json({
         event,
         followUpCreated: false,
@@ -82,30 +95,68 @@ export async function POST(
       engagementType: followUpEventType,
     });
 
-    const followUpDraft = await db.outreachDraft.create({
-      data: {
-        companyId: draft.companyId,
-        contactId: draft.contactId,
-        parentDraftId: draft.id,
-        draftType: OutreachDraftType.FOLLOW_UP,
-        sequenceStep: draft.sequenceStep + 1,
-        emailSubject1: followUp.email_subject_1,
-        emailSubject2: followUp.email_subject_2,
-        coldEmailShort: followUp.cold_email_short,
-        coldEmailMedium: followUp.cold_email_medium,
-        linkedinMessageSafe: followUp.linkedin_message_safe,
-        followUp1: followUp.follow_up_1,
-        followUp2: followUp.follow_up_2,
-        approvalStatus: ApprovalStatus.PENDING_APPROVAL,
-        rawPayload: followUp,
-      },
-    });
+    try {
+      const result = await db.$transaction(async (tx) => {
+        const followUpDraft = await tx.outreachDraft.create({
+          data: {
+            companyId: draft.companyId,
+            contactId: draft.contactId,
+            parentDraftId: draft.id,
+            draftType: OutreachDraftType.FOLLOW_UP,
+            sequenceStep: draft.sequenceStep + 1,
+            emailSubject1: followUp.email_subject_1,
+            emailSubject2: followUp.email_subject_2,
+            coldEmailShort: followUp.cold_email_short,
+            coldEmailMedium: followUp.cold_email_medium,
+            linkedinMessageSafe: followUp.linkedin_message_safe,
+            followUp1: followUp.follow_up_1,
+            followUp2: followUp.follow_up_2,
+            approvalStatus: ApprovalStatus.PENDING_APPROVAL,
+            rawPayload: followUp,
+          },
+        });
 
-    return NextResponse.json({
-      event,
-      followUpCreated: true,
-      followUpDraftId: followUpDraft.id,
-    });
+        const event = await tx.outreachEngagementEvent.create({
+          data: {
+            outreachDraftId: draft.id,
+            companyId: draft.companyId,
+            contactId: draft.contactId,
+            eventType: input.eventType,
+            followUpCreated: true,
+          },
+        });
+
+        return {
+          event,
+          followUpDraft,
+        };
+      });
+
+      return NextResponse.json({
+        event: result.event,
+        followUpCreated: true,
+        followUpDraftId: result.followUpDraft.id,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const event = await db.outreachEngagementEvent.create({
+          data: {
+            outreachDraftId: draft.id,
+            companyId: draft.companyId,
+            contactId: draft.contactId,
+            eventType: input.eventType,
+            followUpCreated: false,
+          },
+        });
+
+        return NextResponse.json({
+          event,
+          followUpCreated: false,
+        });
+      }
+
+      throw error;
+    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

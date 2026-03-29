@@ -6,6 +6,24 @@ type GmailDraftInput = {
   body: string;
 };
 
+export function appendOutreachDeliveryLinks(input: {
+  body: string;
+  assetUrl?: string | null;
+  diagnosticFormUrl?: string | null;
+}) {
+  const sections = [input.body.trim()];
+
+  if (input.assetUrl) {
+    sections.push(`Lead magnet: ${input.assetUrl}`);
+  }
+
+  if (input.diagnosticFormUrl) {
+    sections.push(`Diagnostic form: ${input.diagnosticFormUrl}`);
+  }
+
+  return sections.filter(Boolean).join("\n\n");
+}
+
 export function buildGmailDraftRawMessage({ to, subject, body }: GmailDraftInput) {
   const mime = [
     "Content-Type: text/plain; charset=UTF-8",
