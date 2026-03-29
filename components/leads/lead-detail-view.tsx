@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Linkedin, Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Activity, Linkedin, Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
 
 import { ManualReviewToggle } from "@/components/leads/manual-review-toggle";
 import { PipelineActions } from "@/components/leads/pipeline-actions";
@@ -16,13 +17,53 @@ const tabs = [
   { id: "news", label: "News", icon: Newspaper },
   { id: "pains", label: "Pains", icon: Sparkles },
   { id: "linkedin", label: "LinkedIn", icon: Linkedin },
+  { id: "engagement", label: "Engagement", icon: Activity },
   { id: "outreach", label: "Outreach", icon: Mail },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
 
 export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("company");
+  const [engagementMessage, setEngagementMessage] = useState<string | null>(null);
+  const [engagementError, setEngagementError] = useState<string | null>(null);
+  const [pendingEngagementDraftId, setPendingEngagementDraftId] = useState<string | null>(null);
+
+  function handleEngagement(draftId: string, eventType: "OPEN" | "CLICK" | "ASSET_VIEW" | "REPLY") {
+    setPendingEngagementDraftId(draftId);
+    setEngagementMessage(null);
+    setEngagementError(null);
+
+    void fetch(`/api/outreach-drafts/${draftId}/engagement`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ eventType }),
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Logging engagement failed.");
+        }
+
+        setEngagementMessage(
+          payload.followUpCreated
+            ? "Engagement logged and follow-up draft generated."
+            : "Engagement logged.",
+        );
+        router.refresh();
+      })
+      .catch((cause) => {
+        setEngagementError(
+          cause instanceof Error ? cause.message : "Logging engagement failed.",
+        );
+      })
+      .finally(() => {
+        setPendingEngagementDraftId(null);
+      });
+  }
 
   return (
     <div className="space-y-6">
@@ -166,6 +207,53 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
           </div>
         ) : null}
 
+        {activeTab === "engagement" ? (
+          <div className="grid gap-4">
+            {lead.engagementEvents.length > 0 ? (
+              lead.engagementEvents.map((event) => (
+                <DetailCard
+                  key={event.id}
+                  body={`${event.followUpCreated ? "Follow-up created." : "No follow-up created."} ${event.occurredAtLabel}`}
+                  label={`${event.eventType} event`}
+                  title={`Draft ${event.draftId}`}
+                />
+              ))
+            ) : (
+              <EmptyPanel message="No engagement events recorded yet." />
+            )}
+
+            {lead.outreachDrafts.map((draft) => (
+              <article
+                key={`${draft.id}-engagement-actions`}
+                className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+              >
+                <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                  {draft.draftType === "FOLLOW_UP" ? `Follow-up sequence ${draft.sequenceStep}` : "Initial outreach"}
+                </p>
+                <h2 className="mt-3 font-display text-2xl text-cream">{draft.emailSubject1}</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(["OPEN", "CLICK", "ASSET_VIEW", "REPLY"] as const).map((eventType) => (
+                    <button
+                      key={`${draft.id}-${eventType}`}
+                      className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                      disabled={pendingEngagementDraftId === draft.id}
+                      onClick={() => handleEngagement(draft.id, eventType)}
+                      type="button"
+                    >
+                      Log {eventType.toLowerCase().replaceAll("_", " ")}
+                    </button>
+                  ))}
+                </div>
+              </article>
+            ))}
+
+            {engagementMessage ? (
+              <p className="text-sm text-[#c8e2c0]">{engagementMessage}</p>
+            ) : null}
+            {engagementError ? <p className="text-sm text-[#f1b08f]">{engagementError}</p> : null}
+          </div>
+        ) : null}
+
         {activeTab === "outreach" ? (
           <div className="grid gap-4">
             {lead.leadMagnets.length > 0 ? (
@@ -196,7 +284,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               lead.outreachDrafts.map((draft) => (
                 <DetailCard
                   key={draft.id}
-                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\nFollow-up: ${draft.followUp1}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
+                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\nFollow-up: ${draft.followUp1}\n\nSequence: ${draft.sequenceStep} • ${draft.draftType.replaceAll("_", " ")}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
                   label={`${draft.emailSubject2} • ${draft.approvalStatus.replaceAll("_", " ")}`}
                   title={draft.emailSubject1}
                 />

@@ -25,6 +25,17 @@ export const linkedInTaskSchema = z.object({
   lookup_hints: z.array(z.string()),
 });
 
+export const followUpDraftSchema = z.object({
+  email_subject_1: z.string(),
+  email_subject_2: z.string(),
+  cold_email_short: z.string(),
+  cold_email_medium: z.string(),
+  linkedin_message_safe: z.string(),
+  follow_up_1: z.string(),
+  follow_up_2: z.string(),
+  follow_up_reason: z.enum(["open_only", "high_intent_click", "asset_view", "reply_stop"]),
+});
+
 export function buildOutreachDraft(input: {
   companyName: string;
   contactName?: string;
@@ -86,6 +97,52 @@ export function buildLinkedInTask(input: {
       input.contactName ? `${input.contactName} ${input.companyName} LinkedIn` : `${input.companyName} LinkedIn`,
       input.contactTitle ? `${input.contactTitle} ${input.companyName} LinkedIn` : `${input.companyName} owner LinkedIn`,
     ],
+  });
+}
+
+export function buildFollowUpDraft(input: {
+  companyName: string;
+  contactName?: string;
+  leadMagnetTitle: string;
+  engagementType: "OPEN" | "CLICK" | "ASSET_VIEW";
+}) {
+  const introName = input.contactName ? `${input.contactName}, ` : "";
+
+  if (input.engagementType === "CLICK") {
+    return followUpDraftSchema.parse({
+      email_subject_1: `${input.companyName} follow-up`,
+      email_subject_2: `Checking in on the ${input.leadMagnetTitle}`,
+      cold_email_short: `${introName}Quick follow-up in case the ${input.leadMagnetTitle} sparked any ideas.`,
+      cold_email_medium: `${introName}I noticed someone checked out the ${input.leadMagnetTitle}, so I wanted to follow up while it is still fresh. If helpful, I can tighten it into a more specific recommendation for ${input.companyName}.`,
+      linkedin_message_safe: `Quick follow-up on the ${input.leadMagnetTitle} in case it was useful.`,
+      follow_up_1: `Following up while the ${input.leadMagnetTitle} is still fresh.`,
+      follow_up_2: `Happy to tailor the next recommendation if the current bottleneck is still a priority.`,
+      follow_up_reason: "high_intent_click",
+    });
+  }
+
+  if (input.engagementType === "ASSET_VIEW") {
+    return followUpDraftSchema.parse({
+      email_subject_1: `${input.companyName} asset follow-up`,
+      email_subject_2: `A quick note on the asset view`,
+      cold_email_short: `${introName}Saw the asset got viewed, so I wanted to send a short follow-up.`,
+      cold_email_medium: `${introName}It looks like the lead magnet was viewed, so I wanted to follow up with a short practical next step for ${input.companyName} rather than leave it hanging.`,
+      linkedin_message_safe: `Saw the asset was viewed and wanted to follow up with one practical next step.`,
+      follow_up_1: `Following up after the asset view in case a practical next step would help.`,
+      follow_up_2: `Happy to turn the asset into a more concrete recommendation if useful.`,
+      follow_up_reason: "asset_view",
+    });
+  }
+
+  return followUpDraftSchema.parse({
+    email_subject_1: `${input.companyName} follow-up`,
+    email_subject_2: `Quick follow-up on the ${input.leadMagnetTitle}`,
+    cold_email_short: `${introName}Just following up in case the ${input.leadMagnetTitle} is relevant.`,
+    cold_email_medium: `${introName}I noticed the earlier note was opened and wanted to follow up with one shorter nudge. If the ${input.leadMagnetTitle} is relevant, I can send the most practical version for ${input.companyName}.`,
+    linkedin_message_safe: `Quick follow-up in case the ${input.leadMagnetTitle} is relevant.`,
+    follow_up_1: `Following up in case the ${input.leadMagnetTitle} would be useful.`,
+    follow_up_2: `Happy to send the short version if it would help.`,
+    follow_up_reason: "open_only",
   });
 }
 

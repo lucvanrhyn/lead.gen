@@ -40,6 +40,7 @@ async function main() {
   await prisma.gmailDraftLink.deleteMany();
   await prisma.googleWorkspaceConnection.deleteMany();
   await prisma.linkedInTask.deleteMany();
+  await prisma.outreachEngagementEvent.deleteMany();
   await prisma.batchLead.deleteMany();
   await prisma.leadBatch.deleteMany();
   await prisma.outreachDraft.deleteMany();
@@ -265,6 +266,8 @@ async function main() {
           "I made a quick booking workflow diagnostic for Atlas Dental. Happy to send it over if useful.",
         followUp1: "Following up in case the short workflow diagnostic would be useful.",
         followUp2: "Happy to send the diagnostic if tightening patient follow-up is a priority.",
+        draftType: "INITIAL",
+        sequenceStep: 1,
         approvalStatus: "APPROVED",
         approvedAt: new Date(),
       },
@@ -307,6 +310,35 @@ async function main() {
           "I made a quick booking workflow diagnostic for Atlas Dental. Happy to send it over if useful.",
         followUpDm:
           "Happy to send the diagnostic if tightening patient follow-up is a priority.",
+      },
+    });
+
+    await prisma.outreachDraft.create({
+      data: {
+        companyId: company.id,
+        contactId: company.contacts[0].id,
+        parentDraftId: approvedDraft.id,
+        draftType: "FOLLOW_UP",
+        sequenceStep: 2,
+        emailSubject1: "Atlas Dental Group follow-up",
+        emailSubject2: "Checking in on the teardown",
+        coldEmailShort: "Quick follow-up on the teardown.",
+        coldEmailMedium:
+          "I noticed the earlier note got attention and wanted to follow up while it is still fresh.",
+        linkedinMessageSafe: "Quick follow-up on the teardown.",
+        followUp1: "Following up on the teardown.",
+        followUp2: "Happy to tailor the next recommendation if useful.",
+        approvalStatus: "PENDING_APPROVAL",
+      },
+    });
+
+    await prisma.outreachEngagementEvent.create({
+      data: {
+        outreachDraftId: approvedDraft.id,
+        companyId: company.id,
+        contactId: company.contacts[0].id,
+        eventType: "CLICK",
+        followUpCreated: true,
       },
     });
   }

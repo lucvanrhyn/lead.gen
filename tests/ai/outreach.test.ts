@@ -1,4 +1,4 @@
-import { buildLinkedInTask, buildOutreachDraft } from "@/lib/ai/outreach";
+import { buildFollowUpDraft, buildLinkedInTask, buildOutreachDraft } from "@/lib/ai/outreach";
 
 describe("buildOutreachDraft", () => {
   it("creates a safe outreach bundle from company and pain context", () => {
@@ -48,5 +48,18 @@ describe("buildOutreachDraft", () => {
     expect(task.connection_request_note).toMatch(/Atlas Dental Booking Funnel Teardown/i);
     expect(task.dm_message).toMatch(/treatment-page visits/i);
     expect(task.follow_up_dm).toMatch(/booking conversion/i);
+  });
+
+  it("creates a click-aware follow-up draft with a higher-intent angle", () => {
+    const followUp = buildFollowUpDraft({
+      companyName: "Atlas Dental Group",
+      contactName: "Megan",
+      leadMagnetTitle: "Atlas Dental Booking Funnel Teardown",
+      engagementType: "CLICK",
+    });
+
+    expect(followUp.email_subject_1).toMatch(/follow-up/i);
+    expect(followUp.cold_email_medium).toMatch(/checked out/i);
+    expect(followUp.follow_up_reason).toBe("high_intent_click");
   });
 });

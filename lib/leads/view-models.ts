@@ -96,9 +96,18 @@ export type LeadDetailViewModel = {
     coldEmailShort: string;
     coldEmailMedium: string;
     followUp1: string;
+    draftType: string;
+    sequenceStep: number;
     approvalStatus: string;
     gmailSyncStatus: string;
     sheetSyncStatus: string;
+  }>;
+  engagementEvents: Array<{
+    id: string;
+    draftId: string;
+    eventType: string;
+    followUpCreated: boolean;
+    occurredAtLabel: string;
   }>;
   linkedinTasks: Array<{
     id: string;

@@ -21,6 +21,10 @@ function formatScore(value: number | null | undefined) {
   return value == null ? "Unscored" : `${value} / 100`;
 }
 
+function formatDateTime(value: Date) {
+  return value.toISOString().slice(0, 16).replace("T", " ");
+}
+
 export async function getLeadSummaries(): Promise<LeadTableRow[]> {
   try {
     const companies = await db.company.findMany({
@@ -194,6 +198,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
             },
           },
         },
+        engagementEvents: {
+          orderBy: { occurredAt: "desc" },
+        },
         linkedinTasks: {
           orderBy: { createdAt: "desc" },
         },
@@ -267,9 +274,18 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         coldEmailShort: draft.coldEmailShort,
         coldEmailMedium: draft.coldEmailMedium,
         followUp1: draft.followUp1,
+        draftType: draft.draftType,
+        sequenceStep: draft.sequenceStep,
         approvalStatus: draft.approvalStatus,
         gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
         sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
+      })),
+      engagementEvents: company.engagementEvents.map((event) => ({
+        id: event.id,
+        draftId: event.outreachDraftId,
+        eventType: event.eventType,
+        followUpCreated: event.followUpCreated,
+        occurredAtLabel: formatDateTime(event.occurredAt),
       })),
       linkedinTasks: company.linkedinTasks.map((task) => ({
         id: task.id,

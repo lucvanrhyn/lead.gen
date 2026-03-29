@@ -82,6 +82,18 @@ enum LinkedInTaskStatus {
   SKIPPED
 }
 
+enum OutreachDraftType {
+  INITIAL
+  FOLLOW_UP
+}
+
+enum EngagementEventType {
+  OPEN
+  CLICK
+  ASSET_VIEW
+  REPLY
+}
+
 enum CrawlPageType {
   HOMEPAGE
   SERVICES
@@ -121,6 +133,7 @@ model Company {
   leadMagnets          LeadMagnet[]
   outreachDrafts       OutreachDraft[]
   linkedinTasks        LinkedInTask[]
+  engagementEvents     OutreachEngagementEvent[]
   batchLeads           BatchLead[]
   diagnosticForms      DiagnosticFormBlueprint[]
   sourceEvents         SourceEvent[]
@@ -150,6 +163,7 @@ model Contact {
   company                Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   outreachDrafts         OutreachDraft[]
   linkedinTasks          LinkedInTask[]
+  engagementEvents       OutreachEngagementEvent[]
   sourceEvents           SourceEvent[]
 
   @@index([companyId])
@@ -302,6 +316,9 @@ model OutreachDraft {
   linkedinMessageSafe String @map("linkedin_message_safe")
   followUp1         String   @map("follow_up_1")
   followUp2         String   @map("follow_up_2")
+  draftType         OutreachDraftType @default(INITIAL) @map("draft_type")
+  sequenceStep      Int      @default(1) @map("sequence_step")
+  parentDraftId     String?  @map("parent_draft_id")
   approvalStatus    ApprovalStatus @default(PENDING_APPROVAL) @map("approval_status")
   approvalNotes     String?  @map("approval_notes")
   approvedAt        DateTime? @map("approved_at")
@@ -313,11 +330,36 @@ model OutreachDraft {
   gmailDraftLink    GmailDraftLink?
   sheetSyncRecords  SheetSyncRecord[]
   linkedinTask      LinkedInTask?
+  parentDraft       OutreachDraft? @relation("OutreachDraftFollowUps", fields: [parentDraftId], references: [id], onDelete: SetNull)
+  childDrafts       OutreachDraft[] @relation("OutreachDraftFollowUps")
+  engagementEvents  OutreachEngagementEvent[]
 
   @@index([companyId])
   @@index([contactId])
   @@index([approvalStatus])
+  @@index([draftType])
+  @@index([parentDraftId])
   @@map("outreach_drafts")
+}
+
+model OutreachEngagementEvent {
+  id              String              @id @default(cuid())
+  outreachDraftId String              @map("outreach_draft_id")
+  companyId       String              @map("company_id")
+  contactId       String?             @map("contact_id")
+  eventType       EngagementEventType @map("event_type")
+  followUpCreated Boolean             @default(false) @map("follow_up_created")
+  payload         Json?
+  occurredAt      DateTime            @default(now()) @map("occurred_at")
+  outreachDraft   OutreachDraft       @relation(fields: [outreachDraftId], references: [id], onDelete: Cascade)
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact         Contact?            @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([outreachDraftId])
+  @@index([companyId])
+  @@index([contactId])
+  @@index([eventType])
+  @@map("outreach_engagement_events")
 }
 
 model LinkedInTask {

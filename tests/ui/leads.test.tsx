@@ -96,8 +96,32 @@ const leadDetail = {
       followUp1:
         "Following up in case a short conversion teardown for Atlas Dental's treatment pages would be useful.",
       approvalStatus: "PENDING_APPROVAL",
+      draftType: "INITIAL",
+      sequenceStep: 1,
       gmailSyncStatus: "READY",
       sheetSyncStatus: "NOT_READY",
+    },
+    {
+      id: "outreach-2",
+      emailSubject1: "Atlas Dental Group follow-up",
+      emailSubject2: "Checking in on the teardown",
+      coldEmailShort: "Quick follow-up on the teardown.",
+      coldEmailMedium: "Saw you checked out the teardown and wanted to follow up.",
+      followUp1: "Following up on the teardown.",
+      approvalStatus: "PENDING_APPROVAL",
+      draftType: "FOLLOW_UP",
+      sequenceStep: 2,
+      gmailSyncStatus: "NOT_READY",
+      sheetSyncStatus: "NOT_READY",
+    },
+  ],
+  engagementEvents: [
+    {
+      id: "event-1",
+      draftId: "outreach-1",
+      eventType: "CLICK",
+      followUpCreated: true,
+      occurredAtLabel: "2026-03-29 15:40",
     },
   ],
   diagnosticForms: [
@@ -187,6 +211,18 @@ describe("LeadDetailView", () => {
     expect(screen.getByText(/manual linkedin lookup needed/i)).toBeInTheDocument();
     expect(screen.getByText(/atlas dental booking funnel teardown/i)).toBeInTheDocument();
     expect(screen.getByText(/treatment-page visits to booked consults/i)).toBeInTheDocument();
+  });
+
+  it("shows engagement events and follow-up drafts in the engagement tab", async () => {
+    const user = userEvent.setup();
+
+    render(<LeadDetailView lead={leadDetail} />);
+
+    await user.click(screen.getByRole("button", { name: /^engagement$/i }));
+
+    expect(screen.getByText(/click event/i)).toBeInTheDocument();
+    expect(screen.getByText(/follow-up created/i)).toBeInTheDocument();
+    expect(screen.getByText(/atlas dental group follow-up/i)).toBeInTheDocument();
   });
 });
 
