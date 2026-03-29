@@ -22,6 +22,8 @@ Apollo-first lead discovery and enrichment for high-quality B2B outreach.
 
 If Docker is available, `docker compose up postgres -d` will start the expected local database service.
 
+For Supabase-backed environments, prefer the session pooler connection string (`aws-<region>.pooler.supabase.com:5432`) for Prisma, the Next.js app, and `pg-boss`. The direct `db.<project-ref>.supabase.co:5432` hostname can be IPv6-only and may not resolve from every local environment.
+
 ## Playwright CLI
 
 This repo now pins `@playwright/cli` locally instead of relying on a machine-wide install.

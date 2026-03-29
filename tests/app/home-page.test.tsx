@@ -1,13 +1,19 @@
-import { render, screen } from "@testing-library/react";
-
 import HomePage from "@/app/page";
 
-describe("HomePage", () => {
-  it("shows the lead intelligence dashboard heading", () => {
-    render(<HomePage />);
+const redirect = vi.fn();
 
-    expect(
-      screen.getByRole("heading", { name: /lead intelligence engine/i }),
-    ).toBeInTheDocument();
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => redirect(path),
+}));
+
+describe("HomePage", () => {
+  beforeEach(() => {
+    redirect.mockClear();
+  });
+
+  it("redirects to the working leads workflow", () => {
+    HomePage();
+
+    expect(redirect).toHaveBeenCalledWith("/leads");
   });
 });

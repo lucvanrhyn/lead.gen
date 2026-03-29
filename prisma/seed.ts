@@ -3,13 +3,13 @@ import {
   CrawlPageType,
   EnrichmentStage,
   JobStatus,
-  PrismaClient,
   SourceProvider,
 } from "@prisma/client";
 
+import { createPrismaClient } from "../lib/database-connection";
 import { companySeedGraphSchema } from "../lib/domain/lead-records";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const demoGraph = companySeedGraphSchema.parse({
   company: {

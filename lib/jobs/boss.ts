@@ -1,16 +1,14 @@
 import PgBoss from "pg-boss";
 
+import { getDatabaseConnectionString } from "@/lib/database-connection";
+
 const globalForBoss = globalThis as typeof globalThis & {
   boss?: PgBoss;
 };
 
 function createBoss() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required for pg-boss.");
-  }
-
   return new PgBoss({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: getDatabaseConnectionString(),
     schema: process.env.PG_BOSS_SCHEMA ?? "pgboss",
   });
 }
