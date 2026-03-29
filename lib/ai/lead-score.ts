@@ -32,6 +32,12 @@ type LeadScoreContext = {
   insufficientEvidence: boolean;
   hasTechnologyProfile: boolean;
   newsMentionsCount: number;
+  formResponse?: {
+    status?: "NOT_SHARED" | "LINK_ATTACHED" | "RESPONDED" | "REVIEWED";
+    urgencyLevel?: "LOW" | "MEDIUM" | "HIGH";
+    budgetReadiness?: "NOT_READY" | "EXPLORING" | "READY";
+    workflowDetailDepth?: "LIGHT" | "DETAILED";
+  };
 };
 
 function clampScore(value: number) {
@@ -39,6 +45,20 @@ function clampScore(value: number) {
 }
 
 export function scoreLeadContext(context: LeadScoreContext) {
+  const formUrgencyBoost =
+    context.formResponse?.urgencyLevel === "HIGH"
+      ? 18
+      : context.formResponse?.urgencyLevel === "MEDIUM"
+        ? 10
+        : 0;
+  const formReadinessBoost =
+    context.formResponse?.budgetReadiness === "READY"
+      ? 15
+      : context.formResponse?.budgetReadiness === "EXPLORING"
+        ? 8
+        : 0;
+  const workflowDetailBoost = context.formResponse?.workflowDetailDepth === "DETAILED" ? 10 : 0;
+
   const icpFit = clampScore(
     45 +
       (context.hasIndustry ? 20 : 0) +
@@ -77,20 +97,26 @@ export function scoreLeadContext(context: LeadScoreContext) {
     : clampScore((context.painConfidence ?? 0.4) * 100 + context.painEvidenceCount * 6);
 
   const urgencySignals = clampScore(
-    28 + Math.min(28, context.newsMentionsCount * 18) + (context.painEvidenceCount > 1 ? 18 : 8),
+    28 +
+      Math.min(28, context.newsMentionsCount * 18) +
+      (context.painEvidenceCount > 1 ? 18 : 8) +
+      formUrgencyBoost,
   );
 
   const serviceability = clampScore(
     42 +
       (context.hasWebsite ? 15 : 0) +
       (context.hasTechnologyProfile ? 18 : 5) +
-      (context.hasIndustry ? 15 : 0),
+      (context.hasIndustry ? 15 : 0) +
+      workflowDetailBoost,
   );
 
   const outreachConfidence = clampScore(
     (contactability * 0.35) +
-      (painEvidenceStrength * 0.35) +
-      (decisionMakerCertainty * 0.3),
+      (painEvidenceStrength * 0.3) +
+      (decisionMakerCertainty * 0.25) +
+      formReadinessBoost +
+      Math.round(workflowDetailBoost * 0.6),
   );
 
   const components = {

@@ -13,13 +13,16 @@ export async function POST(
     include: {
       contacts: {
         orderBy: { decisionMakerConfidence: "desc" },
-        take: 1,
       },
       painHypotheses: {
         orderBy: { createdAt: "desc" },
         take: 1,
       },
       leadMagnets: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+      diagnosticForms: {
         orderBy: { createdAt: "desc" },
         take: 1,
       },
@@ -33,19 +36,41 @@ export async function POST(
     );
   }
 
-  const contact = company.contacts[0];
   const latestPain = company.painHypotheses[0];
   const latestLeadMagnet = company.leadMagnets[0];
+  const latestForm = company.diagnosticForms[0];
+  const contacts =
+    company.contacts.length > 0
+      ? company.contacts
+      : [
+          {
+            id: undefined,
+            firstName: null,
+            fullName: null,
+          },
+        ];
 
-  const outreach = buildOutreachDraft({
-    companyName: company.name,
-    contactName: contact?.firstName ?? contact?.fullName,
-    pain: latestPain.primaryPain,
-    leadMagnetTitle: latestLeadMagnet.title,
-    serviceAngle: latestPain.recommendedServiceAngle,
-  });
+  const drafts = [];
 
-  await persistOutreachDraft(company.id, outreach, contact?.id);
+  for (const contact of contacts) {
+    const outreach = buildOutreachDraft({
+      companyName: company.name,
+      contactName: contact.firstName ?? contact.fullName ?? undefined,
+      pain: latestPain.primaryPain,
+      leadMagnetTitle: latestLeadMagnet.title,
+      serviceAngle: latestPain.recommendedServiceAngle,
+      diagnosticFormCta: latestForm
+        ? {
+            mode: "lead_magnet_and_form",
+            short: latestForm.outreachCtaShort,
+            medium: latestForm.outreachCtaMedium,
+          }
+        : undefined,
+    });
 
-  return NextResponse.json(outreach);
+    await persistOutreachDraft(company.id, outreach, contact.id);
+    drafts.push(outreach);
+  }
+
+  return NextResponse.json(drafts[0]);
 }

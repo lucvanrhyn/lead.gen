@@ -34,6 +34,10 @@ const demoGraph = companySeedGraphSchema.parse({
 });
 
 async function main() {
+  await prisma.diagnosticFormLink.deleteMany();
+  await prisma.diagnosticFormBlueprint.deleteMany();
+  await prisma.batchLead.deleteMany();
+  await prisma.leadBatch.deleteMany();
   await prisma.outreachDraft.deleteMany();
   await prisma.leadMagnet.deleteMany();
   await prisma.leadScore.deleteMany();
@@ -221,6 +225,63 @@ async function main() {
       },
     });
   }
+
+  const blueprint = await prisma.diagnosticFormBlueprint.create({
+    data: {
+      companyId: company.id,
+      industry: "Dental Clinics",
+      primaryGoal: "Conversion-focused website teardown for treatment pages",
+      qualificationStrength: "medium",
+      estimatedCompletionTime: "2-4 minutes",
+      formTitle: "Atlas Dental Workflow Diagnostic",
+      formIntro:
+        "A short diagnostic to pinpoint where booking and follow-up friction may be leaking high-value treatment demand.",
+      closingMessage:
+        "Thanks for filling this in. This gives enough context to make the next recommendation practical.",
+      outreachCtaShort:
+        "I put together a short 2-minute workflow diagnostic for dental clinics.",
+      outreachCtaMedium:
+        "I made a quick bottleneck assessment form tailored to clinics that want to tighten bookings and follow-up.",
+      formSections: [
+        {
+          section_name: "Basic business context",
+          section_description: "A quick profile of the business and respondent.",
+          questions: [],
+        },
+        {
+          section_name: "Current operational situation",
+          section_description: "How the work currently flows and where friction appears.",
+          questions: [],
+        },
+        {
+          section_name: "Pain points and priorities",
+          section_description: "What costs the business time, money, and momentum right now.",
+          questions: [],
+        },
+        {
+          section_name: "Lead qualification / readiness",
+          section_description: "How ready the business is to act on a practical recommendation.",
+          questions: [],
+        },
+        {
+          section_name: "Optional open text",
+          section_description: "Anything specific the respondent wants reviewed further.",
+          questions: [],
+        },
+      ],
+      rawPayload: {
+        usage_mode: "lead_magnet_and_form",
+      },
+    },
+  });
+
+  await prisma.diagnosticFormLink.create({
+    data: {
+      blueprintId: blueprint.id,
+      url: "https://forms.gle/example-atlas-dental",
+      responseStatus: "LINK_ATTACHED",
+    },
+  });
 }
 
 main()

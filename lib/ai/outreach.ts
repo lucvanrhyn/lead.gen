@@ -17,16 +17,37 @@ export function buildOutreachDraft(input: {
   pain: string;
   leadMagnetTitle: string;
   serviceAngle: string;
+  diagnosticFormCta?: {
+    mode: "lead_magnet_only" | "form_only" | "lead_magnet_and_form";
+    short: string;
+    medium: string;
+  };
 }) {
   const introName = input.contactName ? `${input.contactName}, ` : "";
+  const shortCta =
+    input.diagnosticFormCta?.mode === "form_only"
+      ? input.diagnosticFormCta.short
+      : `I put together a short ${input.leadMagnetTitle} for ${input.companyName} after noticing a likely issue around ${input.pain.toLowerCase()}. If useful, I can send it over.`;
+  const mediumCta =
+    input.diagnosticFormCta?.mode === "form_only"
+      ? input.diagnosticFormCta.medium
+      : input.diagnosticFormCta?.mode === "lead_magnet_and_form"
+        ? `I drafted a concise ${input.leadMagnetTitle} and a short workflow diagnostic focused on ${input.pain.toLowerCase()} so the next recommendation can be practical.`
+        : `I spent some time reviewing the public footprint for ${input.companyName}. There looks to be a real opportunity around ${input.pain.toLowerCase()}. I drafted a concise ${input.leadMagnetTitle} that focuses on ${input.serviceAngle.toLowerCase()}. Happy to send it if that would be useful.`;
 
   return outreachSchema.parse({
     email_subject_1: `${input.companyName}: ${input.leadMagnetTitle}`,
     email_subject_2: `A quick idea on ${input.pain.toLowerCase()}`,
-    cold_email_short: `${introName}I put together a short ${input.leadMagnetTitle} for ${input.companyName} after noticing a likely issue around ${input.pain.toLowerCase()}. If useful, I can send it over.`,
-    cold_email_medium: `${introName}I spent some time reviewing the public footprint for ${input.companyName}. There looks to be a real opportunity around ${input.pain.toLowerCase()}. I drafted a concise ${input.leadMagnetTitle} that focuses on ${input.serviceAngle.toLowerCase()}. Happy to send it if that would be useful.`,
-    linkedin_message_safe: `I put together a short ${input.leadMagnetTitle} for ${input.companyName} focused on ${input.pain.toLowerCase()}. Happy to share it if helpful.`,
-    follow_up_1: `Following up in case the ${input.leadMagnetTitle} would be useful for ${input.companyName}.`,
+    cold_email_short: `${introName}${shortCta}`,
+    cold_email_medium: `${introName}${mediumCta}`,
+    linkedin_message_safe:
+      input.diagnosticFormCta?.mode === "form_only"
+        ? `${input.diagnosticFormCta.short} Happy to share it if helpful.`
+        : `I put together a short ${input.leadMagnetTitle} for ${input.companyName} focused on ${input.pain.toLowerCase()}. Happy to share it if helpful.`,
+    follow_up_1:
+      input.diagnosticFormCta?.mode === "form_only"
+        ? `Following up in case the short workflow diagnostic would be useful for ${input.companyName}.`
+        : `Following up in case the ${input.leadMagnetTitle} would be useful for ${input.companyName}.`,
     follow_up_2: `Happy to send over the ${input.leadMagnetTitle} if improving ${input.pain.toLowerCase()} is on your radar.`,
   });
 }

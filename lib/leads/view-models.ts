@@ -71,4 +71,13 @@ export type LeadDetailViewModel = {
     coldEmailMedium: string;
     followUp1: string;
   }>;
+  diagnosticForms: Array<{
+    id: string;
+    formTitle: string;
+    estimatedCompletionTime: string;
+    industry: string;
+    outreachCtaShort: string;
+    googleFormUrl?: string;
+    responseStatus: string;
+  }>;
 };

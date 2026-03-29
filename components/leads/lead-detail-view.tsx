@@ -179,6 +179,18 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             ) : (
               <EmptyPanel message="No lead magnet generated yet." />
             )}
+            {lead.diagnosticForms.length > 0 ? (
+              lead.diagnosticForms.map((form) => (
+                <DetailCard
+                  key={form.id}
+                  body={`${form.outreachCtaShort} Estimated completion time: ${form.estimatedCompletionTime}.${form.googleFormUrl ? ` Google Form: ${form.googleFormUrl}.` : ""} Response status: ${form.responseStatus}.`}
+                  label={form.industry}
+                  title={form.formTitle}
+                />
+              ))
+            ) : (
+              <EmptyPanel message="No diagnostic form generated yet." />
+            )}
             {lead.outreachDrafts.length > 0 ? (
               lead.outreachDrafts.map((draft) => (
                 <DetailCard

@@ -48,6 +48,13 @@ enum JobStatus {
   CANCELLED
 }
 
+enum DiagnosticFormResponseStatus {
+  NOT_SHARED
+  LINK_ATTACHED
+  RESPONDED
+  REVIEWED
+}
+
 enum CrawlPageType {
   HOMEPAGE
   SERVICES
@@ -86,6 +93,8 @@ model Company {
   leadScores           LeadScore[]
   leadMagnets          LeadMagnet[]
   outreachDrafts       OutreachDraft[]
+  batchLeads           BatchLead[]
+  diagnosticForms      DiagnosticFormBlueprint[]
   sourceEvents         SourceEvent[]
   enrichmentJobs       EnrichmentJob[]
 
@@ -212,6 +221,7 @@ model PainHypothesis {
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
   company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  diagnosticForms           DiagnosticFormBlueprint[]
 
   @@index([companyId])
   @@map("pain_hypotheses")
@@ -315,4 +325,80 @@ model EnrichmentJob {
   @@index([stage])
   @@index([status])
   @@map("enrichment_jobs")
+}
+
+model LeadBatch {
+  id                 String     @id @default(cuid())
+  industry           String
+  region             String
+  requestedLeadCount Int        @map("requested_lead_count")
+  status             JobStatus  @default(PENDING)
+  autoRunPipeline    Boolean    @default(true) @map("auto_run_pipeline")
+  completedCompanies Int        @default(0) @map("completed_companies")
+  failedCompanies    Int        @default(0) @map("failed_companies")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  leads              BatchLead[]
+
+  @@index([status])
+  @@map("lead_batches")
+}
+
+model BatchLead {
+  id         String    @id @default(cuid())
+  batchId    String    @map("batch_id")
+  companyId  String    @map("company_id")
+  status     JobStatus @default(PENDING)
+  lastError  String?   @map("last_error")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  batch      LeadBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, companyId])
+  @@index([batchId])
+  @@index([companyId])
+  @@index([status])
+  @@map("batch_leads")
+}
+
+model DiagnosticFormBlueprint {
+  id                      String                 @id @default(cuid())
+  companyId               String                 @map("company_id")
+  painHypothesisId        String?                @map("pain_hypothesis_id")
+  industry                String
+  primaryGoal             String                 @map("primary_goal")
+  qualificationStrength   String                 @map("qualification_strength")
+  estimatedCompletionTime String                 @map("estimated_completion_time")
+  formTitle               String                 @map("form_title")
+  formIntro               String                 @map("form_intro")
+  closingMessage          String                 @map("closing_message")
+  outreachCtaShort        String                 @map("outreach_cta_short")
+  outreachCtaMedium       String                 @map("outreach_cta_medium")
+  formSections            Json                   @map("form_sections")
+  rawPayload              Json?                  @map("raw_payload")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+  company                 Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  painHypothesis          PainHypothesis?        @relation(fields: [painHypothesisId], references: [id], onDelete: SetNull)
+  formLink                DiagnosticFormLink?
+
+  @@index([companyId])
+  @@index([painHypothesisId])
+  @@map("diagnostic_form_blueprints")
+}
+
+model DiagnosticFormLink {
+  id             String                       @id @default(cuid())
+  blueprintId    String                       @unique @map("blueprint_id")
+  url            String
+  responseStatus DiagnosticFormResponseStatus @default(NOT_SHARED) @map("response_status")
+  responseSummary Json?                       @map("response_summary")
+  scoreImpact    Json?                        @map("score_impact")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt @map("updated_at")
+  blueprint      DiagnosticFormBlueprint      @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  @@index([responseStatus])
+  @@map("diagnostic_form_links")
 }

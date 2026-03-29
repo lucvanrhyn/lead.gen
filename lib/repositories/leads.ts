@@ -76,6 +76,12 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
         },
+        diagnosticForms: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            formLink: true,
+          },
+        },
       },
     });
 
@@ -140,6 +146,15 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         coldEmailShort: draft.coldEmailShort,
         coldEmailMedium: draft.coldEmailMedium,
         followUp1: draft.followUp1,
+      })),
+      diagnosticForms: company.diagnosticForms.map((form) => ({
+        id: form.id,
+        formTitle: form.formTitle,
+        estimatedCompletionTime: form.estimatedCompletionTime,
+        industry: form.industry,
+        outreachCtaShort: form.outreachCtaShort,
+        googleFormUrl: form.formLink?.url ?? undefined,
+        responseStatus: form.formLink?.responseStatus ?? "NOT_SHARED",
       })),
     };
   } catch {

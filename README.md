@@ -9,7 +9,9 @@ Apollo-first lead discovery and enrichment for high-quality B2B outreach.
 - Apollo enrichment
 - Firecrawl extraction
 - Structured pain hypotheses
-- Later phases for scoring, lead magnets, and outreach generation
+- Lead scoring, lead magnets, and outreach generation
+- Batch auto-run orchestration from discovery
+- Diagnostic Google Form blueprint generation and storage
 
 ## Local setup
 1. Copy `.env.example` to `.env`
@@ -47,6 +49,8 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 ## Current data model
 - `companies`
 - `contacts`
+- `lead_batches`
+- `batch_leads`
 - `company_locations`
 - `technology_profiles`
 - `news_mentions`
@@ -55,7 +59,23 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 - `lead_scores`
 - `lead_magnets`
 - `outreach_drafts`
+- `diagnostic_form_blueprints`
+- `diagnostic_form_links`
 - `source_events`
 - `enrichment_jobs`
 
-The provider adapters, queue workers, and pipeline routes will be layered on top of this schema in the next phases.
+## Batch automation and forms
+
+- Discovery now creates a persisted `lead_batch` and auto-runs the full pipeline for each discovered company by default.
+- The company pipeline now generates:
+  - Apollo enrichment
+  - Firecrawl extraction when a website exists
+  - pain hypothesis
+  - lead score
+  - lead magnet
+  - diagnostic form blueprint
+  - outreach drafts for every valid contact
+- The diagnostic form layer is stored as a blueprint first, with an optional live Google Form URL and response status attached later.
+- When a form response summary is saved, the app records score impact and persists an updated lead score using the extra urgency/readiness signals.
+
+The next slices build on this with a batch approval queue, Gmail draft syncing, Google Sheets ledger sync, and follow-up automation.

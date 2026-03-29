@@ -15,6 +15,7 @@ const actionConfig = [
   { id: "pain", label: "Generate pains", endpoint: "pain-hypothesis" },
   { id: "score", label: "Score lead", endpoint: "score" },
   { id: "magnet", label: "Create lead magnet", endpoint: "lead-magnet" },
+  { id: "form", label: "Generate form", endpoint: "diagnostic-form" },
   { id: "outreach", label: "Draft outreach", endpoint: "outreach" },
 ] as const;
 
@@ -76,6 +77,7 @@ export function PipelineActions({ leadId, hasWebsite }: PipelineActionsProps) {
         await runAction("pain-hypothesis", "Generate pains");
         await runAction("score", "Score lead");
         await runAction("lead-magnet", "Create lead magnet");
+        await runAction("diagnostic-form", "Generate form");
         await runAction("outreach", "Draft outreach");
 
         setMessage("Full lead pipeline completed.");

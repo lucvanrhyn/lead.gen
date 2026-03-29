@@ -46,6 +46,7 @@ export function DiscoveryForm() {
           body: JSON.stringify({
             ...form,
             persist: true,
+            autoRunPipeline: true,
           }),
         });
 
@@ -56,7 +57,7 @@ export function DiscoveryForm() {
         }
 
         setMessage(
-          `Discovered ${payload.candidates?.length ?? 0} lead${payload.candidates?.length === 1 ? "" : "s"} for ${form.industry} in ${form.region}.`,
+          `Discovered ${payload.candidates?.length ?? 0} lead${payload.candidates?.length === 1 ? "" : "s"} for ${form.industry} in ${form.region} and started the full pipeline for batch ${payload.batch?.id ?? "run"}.`,
         );
         router.refresh();
       } catch (cause) {

@@ -94,6 +94,17 @@ const leadDetail = {
         "Following up in case a short conversion teardown for Atlas Dental's treatment pages would be useful.",
     },
   ],
+  diagnosticForms: [
+    {
+      id: "form-1",
+      formTitle: "Atlas Dental Workflow Diagnostic",
+      estimatedCompletionTime: "2-4 minutes",
+      industry: "Dental Clinics",
+      outreachCtaShort: "I put together a short 2-minute workflow diagnostic for dental clinics.",
+      googleFormUrl: "https://forms.gle/example",
+      responseStatus: "LINK_ATTACHED",
+    },
+  ],
 };
 
 describe("LeadTable", () => {
@@ -131,5 +142,18 @@ describe("LeadDetailView", () => {
 
     expect(screen.getByText(/atlas dental booking funnel teardown/i)).toBeInTheDocument();
     expect(screen.getByText(/a quick idea for atlas dental bookings/i)).toBeInTheDocument();
+  });
+
+  it("shows the latest diagnostic form blueprint and generate action", async () => {
+    const user = userEvent.setup();
+
+    render(<LeadDetailView lead={leadDetail} />);
+
+    expect(screen.getByRole("button", { name: /generate form/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^outreach$/i }));
+
+    expect(screen.getByText(/atlas dental workflow diagnostic/i)).toBeInTheDocument();
+    expect(screen.getByText(/2-minute workflow diagnostic/i)).toBeInTheDocument();
   });
 });
