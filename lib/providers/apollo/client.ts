@@ -17,6 +17,11 @@ const DEFAULT_TITLE_HINTS = [
 
 type FetchLike = typeof fetch;
 
+type ApolloErrorPayload = {
+  error?: string;
+  error_code?: string;
+};
+
 type ApolloOrganizationPayload = {
   organization?: {
     id?: string;
@@ -74,6 +79,18 @@ export type NormalizedApolloContact = {
   raw: ApolloPerson;
 };
 
+class ApolloApiError extends Error {
+  status: number;
+  errorCode?: string;
+
+  constructor(message: string, status: number, errorCode?: string) {
+    super(message);
+    this.name = "ApolloApiError";
+    this.status = status;
+    this.errorCode = errorCode;
+  }
+}
+
 function getApolloApiKey(apiKey?: string) {
   const resolved = apiKey ?? process.env.APOLLO_API_KEY;
 
@@ -106,15 +123,27 @@ async function fetchApolloJson(
       return response.json();
     }
 
+    const errorPayload = (await response.json().catch(() => ({}))) as ApolloErrorPayload;
+    const errorMessage =
+      errorPayload.error ?? `Apollo request failed with status ${response.status}.`;
+
     if (response.status === 429 || response.status >= 500) {
-      lastError = new Error(`Apollo request failed with status ${response.status}.`);
+      lastError = new ApolloApiError(errorMessage, response.status, errorPayload.error_code);
       continue;
     }
 
-    throw new Error(`Apollo request failed with status ${response.status}.`);
+    throw new ApolloApiError(errorMessage, response.status, errorPayload.error_code);
   }
 
   throw lastError ?? new Error("Apollo request failed after retries.");
+}
+
+function isApolloPeoplePlanRestriction(error: unknown) {
+  return (
+    error instanceof ApolloApiError &&
+    error.status === 403 &&
+    error.errorCode === "API_INACCESSIBLE"
+  );
 }
 
 export function normalizeApolloOrganization(
@@ -202,7 +231,7 @@ async function searchApolloPeople(
   fetchFn: FetchLike,
 ) {
   return fetchApolloJson(
-    `${APOLLO_BASE_URL}/mixed_people/search`,
+    `${APOLLO_BASE_URL}/mixed_people/api_search`,
     {
       method: "POST",
       headers: {
@@ -264,16 +293,26 @@ export async function enrichApolloCompanyAndContacts(
 
   const organizationPayload = await fetchApolloOrganization(input.domain, apiKey, fetchFn);
   const company = normalizeApolloOrganization(organizationPayload);
+  const warnings: string[] = [];
+  let contacts: NormalizedApolloContact[] = [];
 
-  const peopleSearchPayload = await searchApolloPeople(input.domain, apiKey, fetchFn);
-  const matchedPeoplePayload = await bulkMatchApolloPeople(
-    peopleSearchPayload.people ?? [],
-    input.domain,
-    apiKey,
-    fetchFn,
-  );
+  try {
+    const peopleSearchPayload = await searchApolloPeople(input.domain, apiKey, fetchFn);
+    const matchedPeoplePayload = await bulkMatchApolloPeople(
+      peopleSearchPayload.people ?? [],
+      input.domain,
+      apiKey,
+      fetchFn,
+    );
 
-  const contacts = (matchedPeoplePayload.people ?? []).map(normalizeApolloContact);
+    contacts = (matchedPeoplePayload.people ?? []).map(normalizeApolloContact);
+  } catch (error) {
+    if (!isApolloPeoplePlanRestriction(error)) {
+      throw error;
+    }
+
+    warnings.push("Apollo people search is unavailable for the current Apollo API plan.");
+  }
 
   if (options?.persist !== false && input.persistCompanyId) {
     await persistApolloEnrichment(input.persistCompanyId, company, contacts);
@@ -282,6 +321,7 @@ export async function enrichApolloCompanyAndContacts(
   return {
     company,
     contacts,
+    warnings,
   };
 }
 

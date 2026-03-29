@@ -22,6 +22,22 @@ describe("selectFirecrawlCandidatePages", () => {
       "BLOG",
     ]);
   });
+
+  it("accepts Firecrawl v2 link objects and ignores malformed entries", () => {
+    const pages = selectFirecrawlCandidatePages("https://atlasdental.co.za", [
+      { url: "https://atlasdental.co.za/" },
+      { url: "https://atlasdental.co.za/about" },
+      { url: "https://atlasdental.co.za/contact" },
+      { url: "/relative-path" },
+      { url: "" },
+    ]);
+
+    expect(pages.map((page) => page.pageType)).toEqual([
+      "HOMEPAGE",
+      "ABOUT",
+      "CONTACT",
+    ]);
+  });
 });
 
 describe("normalizeFirecrawlPage", () => {

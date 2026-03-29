@@ -151,6 +151,43 @@ function extractOutputText(payload: unknown) {
     return payload.output_text;
   }
 
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "output" in payload &&
+    Array.isArray(payload.output)
+  ) {
+    for (const outputItem of payload.output) {
+      if (
+        outputItem &&
+        typeof outputItem === "object" &&
+        "content" in outputItem &&
+        Array.isArray(outputItem.content)
+      ) {
+        for (const contentItem of outputItem.content) {
+          if (
+            contentItem &&
+            typeof contentItem === "object" &&
+            "text" in contentItem &&
+            typeof contentItem.text === "string"
+          ) {
+            return contentItem.text;
+          }
+
+          if (
+            contentItem &&
+            typeof contentItem === "object" &&
+            "parsed" in contentItem &&
+            contentItem.parsed &&
+            typeof contentItem.parsed === "object"
+          ) {
+            return JSON.stringify(contentItem.parsed);
+          }
+        }
+      }
+    }
+  }
+
   return null;
 }
 

@@ -122,4 +122,52 @@ describe("enrichApolloCompanyAndContacts", () => {
       email: "megan@atlasdental.co.za",
     });
   });
+
+  it("returns company enrichment and no contacts when people search is inaccessible on the current Apollo plan", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            organization: {
+              id: "apollo-org-1",
+              name: "Atlas Dental Group",
+              website_url: "https://atlasdental.co.za",
+              industry: "Hospital & Health Care",
+              estimated_num_employees: 48,
+              city: "Cape Town",
+              country: "South Africa",
+            },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error:
+              "api/v1/mixed_people/api_search is not accessible with this api_key on a free plan.",
+            error_code: "API_INACCESSIBLE",
+          }),
+          { status: 403 },
+        ),
+      );
+
+    const result = await enrichApolloCompanyAndContacts(
+      {
+        domain: "atlasdental.co.za",
+        companyName: "Atlas Dental Group",
+      },
+      {
+        apiKey: "apollo_test_key",
+        fetchFn,
+      },
+    );
+
+    expect(result.company.apolloOrganizationId).toBe("apollo-org-1");
+    expect(result.contacts).toEqual([]);
+    expect(result.warnings).toContain(
+      "Apollo people search is unavailable for the current Apollo API plan.",
+    );
+  });
 });

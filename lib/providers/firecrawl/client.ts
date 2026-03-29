@@ -16,6 +16,8 @@ type FirecrawlPageSelection = {
   url: string;
 };
 
+type FirecrawlMapLink = string | { url?: string | null };
+
 type FirecrawlScrapeResponse = {
   data?: {
     markdown?: string;
@@ -85,12 +87,32 @@ function classifyPageType(pathname: string) {
   return null;
 }
 
-export function selectFirecrawlCandidatePages(baseUrl: string, mappedUrls: string[]) {
+function getFirecrawlCandidateUrl(candidate: FirecrawlMapLink) {
+  if (typeof candidate === "string") {
+    return candidate;
+  }
+
+  return candidate.url ?? "";
+}
+
+export function selectFirecrawlCandidatePages(baseUrl: string, mappedUrls: FirecrawlMapLink[]) {
   const base = new URL(baseUrl);
   const selected = new Map<string, FirecrawlPageSelection>();
 
-  for (const candidateUrl of mappedUrls) {
-    const parsed = new URL(candidateUrl);
+  for (const candidate of mappedUrls) {
+    const candidateUrl = getFirecrawlCandidateUrl(candidate);
+
+    if (!candidateUrl.startsWith("http://") && !candidateUrl.startsWith("https://")) {
+      continue;
+    }
+
+    let parsed: URL;
+
+    try {
+      parsed = new URL(candidateUrl);
+    } catch {
+      continue;
+    }
 
     if (parsed.origin !== base.origin) {
       continue;
@@ -161,7 +183,7 @@ async function mapWebsitePages(
       }),
     },
     fetchFn,
-  ) as Promise<{ links?: string[] }>;
+  ) as Promise<{ links?: FirecrawlMapLink[] }>;
 }
 
 async function scrapePage(
