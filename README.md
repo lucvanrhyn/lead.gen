@@ -78,4 +78,11 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 - The diagnostic form layer is stored as a blueprint first, with an optional live Google Form URL and response status attached later.
 - When a form response summary is saved, the app records score impact and persists an updated lead score using the extra urgency/readiness signals.
 
-The next slices build on this with a batch approval queue, Gmail draft syncing, Google Sheets ledger sync, and follow-up automation.
+## Approval queue and outreach ops
+
+- Generated outreach drafts now enter a `PENDING_APPROVAL` state by default.
+- The `/leads` dashboard now includes an approval queue with per-draft Gmail and Sheets sync badges.
+- Approving a draft marks it ready for Gmail handoff and stores Gmail sync metadata separately from the draft body.
+- Google Sheets sync metadata is tracked per draft and per target tab so the app can remain the source of truth while Sheets acts as the operator ledger.
+
+The next slices build on this with real Gmail draft delivery, Sheets row syncing, LinkedIn manual task generation, and follow-up automation.

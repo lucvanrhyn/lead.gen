@@ -1,13 +1,14 @@
 import Link from "next/link";
 
+import { ApprovalQueue } from "@/components/leads/approval-queue";
 import { DiscoveryForm } from "@/components/leads/discovery-form";
 import { LeadTable } from "@/components/leads/lead-table";
-import { getLeadSummaries } from "@/lib/repositories/leads";
+import { getApprovalQueue, getLeadSummaries } from "@/lib/repositories/leads";
 
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage() {
-  const leads = await getLeadSummaries();
+  const [leads, approvalQueue] = await Promise.all([getLeadSummaries(), getApprovalQueue()]);
 
   return (
     <main className="min-h-screen px-6 py-8 sm:px-10 lg:px-12">
@@ -33,6 +34,7 @@ export default async function LeadsPage() {
         </div>
 
         <DiscoveryForm />
+        <ApprovalQueue items={approvalQueue.items} summary={approvalQueue.summary} />
         <LeadTable leads={leads} />
       </div>
     </main>

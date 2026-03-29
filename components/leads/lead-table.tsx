@@ -55,6 +55,11 @@ export function LeadTable({ leads }: { leads: LeadTableRow[] }) {
                     Needs review
                   </span>
                 ) : null}
+                {lead.approvalStatus ? (
+                  <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1 text-xs uppercase tracking-[0.22em] text-[rgba(245,235,212,0.72)]">
+                    {lead.approvalStatus.replaceAll("_", " ")}
+                  </span>
+                ) : null}
               </div>
 
               <div>

@@ -36,6 +36,8 @@ const demoGraph = companySeedGraphSchema.parse({
 async function main() {
   await prisma.diagnosticFormLink.deleteMany();
   await prisma.diagnosticFormBlueprint.deleteMany();
+  await prisma.sheetSyncRecord.deleteMany();
+  await prisma.gmailDraftLink.deleteMany();
   await prisma.batchLead.deleteMany();
   await prisma.leadBatch.deleteMany();
   await prisma.outreachDraft.deleteMany();
@@ -222,6 +224,45 @@ async function main() {
           "Following up in case a short conversion teardown for Atlas Dental's treatment pages would be useful.",
         followUp2:
           "Happy to send the teardown if improving booking conversion is a priority this quarter.",
+        approvalStatus: "PENDING_APPROVAL",
+      },
+    });
+
+    const approvedDraft = await prisma.outreachDraft.create({
+      data: {
+        companyId: company.id,
+        contactId: company.contacts[0].id,
+        emailSubject1: "Atlas Dental workflow diagnostic",
+        emailSubject2: "A short diagnostic for your bookings and follow-up flow",
+        coldEmailShort:
+          "I put together a short 2-minute workflow diagnostic for dental clinics like Atlas Dental.",
+        coldEmailMedium:
+          "I made a quick bottleneck assessment form tailored to practices that want to tighten bookings and follow-up before patient interest goes cold.",
+        linkedinMessageSafe:
+          "I made a quick booking workflow diagnostic for Atlas Dental. Happy to send it over if useful.",
+        followUp1: "Following up in case the short workflow diagnostic would be useful.",
+        followUp2: "Happy to send the diagnostic if tightening patient follow-up is a priority.",
+        approvalStatus: "APPROVED",
+        approvedAt: new Date(),
+      },
+    });
+
+    await prisma.gmailDraftLink.create({
+      data: {
+        outreachDraftId: approvedDraft.id,
+        gmailDraftId: "draft-demo-1",
+        gmailThreadId: "thread-demo-1",
+        syncStatus: "SYNCED",
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    await prisma.sheetSyncRecord.create({
+      data: {
+        outreachDraftId: approvedDraft.id,
+        tabName: "Drafts",
+        rowKey: "draft-demo-1",
+        syncStatus: "READY",
       },
     });
   }

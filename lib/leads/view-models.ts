@@ -11,6 +11,24 @@ export type LeadTableRow = {
   contactsCount: number;
   manualReviewRequired: boolean;
   status: string;
+  approvalStatus?: string;
+};
+
+export type ApprovalQueueSummary = {
+  pendingApprovalCount: number;
+  approvedCount: number;
+  syncedDraftCount: number;
+};
+
+export type ApprovalQueueItem = {
+  draftId: string;
+  leadId: string;
+  companyName: string;
+  contactName?: string;
+  emailSubject: string;
+  approvalStatus: string;
+  gmailSyncStatus: string;
+  sheetSyncStatus: string;
 };
 
 export type LeadDetailViewModel = {
@@ -70,6 +88,9 @@ export type LeadDetailViewModel = {
     coldEmailShort: string;
     coldEmailMedium: string;
     followUp1: string;
+    approvalStatus: string;
+    gmailSyncStatus: string;
+    sheetSyncStatus: string;
   }>;
   diagnosticForms: Array<{
     id: string;

@@ -70,6 +70,7 @@ export async function persistOutreachDraft(
       linkedinMessageSafe: outreach.linkedin_message_safe,
       followUp1: outreach.follow_up_1,
       followUp2: outreach.follow_up_2,
+      approvalStatus: "PENDING_APPROVAL",
       rawPayload: outreach,
     },
   });

@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
-import { type LeadDetailViewModel, type LeadTableRow } from "@/lib/leads/view-models";
+import { deriveApprovalQueueSummary } from "@/lib/domain/outreach-ops";
+import {
+  type ApprovalQueueItem,
+  type ApprovalQueueSummary,
+  type LeadDetailViewModel,
+  type LeadTableRow,
+} from "@/lib/leads/view-models";
 
 function formatConfidence(value: number | null | undefined) {
   return value == null ? "--" : value.toFixed(2);
@@ -27,6 +33,10 @@ export async function getLeadSummaries(): Promise<LeadTableRow[]> {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        outreachDrafts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
       },
     });
 
@@ -43,9 +53,70 @@ export async function getLeadSummaries(): Promise<LeadTableRow[]> {
       contactsCount: company.contacts.length,
       manualReviewRequired: company.manualReviewRequired,
       status: company.status,
+      approvalStatus: company.outreachDrafts[0]?.approvalStatus,
     }));
   } catch {
     return [];
+  }
+}
+
+export async function getApprovalQueue(): Promise<{
+  summary: ApprovalQueueSummary;
+  items: ApprovalQueueItem[];
+}> {
+  try {
+    const drafts = await db.outreachDraft.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        contact: {
+          select: {
+            fullName: true,
+          },
+        },
+        gmailDraftLink: true,
+        sheetSyncRecords: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    const items = drafts.map((draft) => ({
+      draftId: draft.id,
+      leadId: draft.company.id,
+      companyName: draft.company.name,
+      contactName: draft.contact?.fullName ?? undefined,
+      emailSubject: draft.emailSubject1,
+      approvalStatus: draft.approvalStatus,
+      gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
+      sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
+    }));
+
+    return {
+      summary: deriveApprovalQueueSummary(
+        items.map((item) => ({
+          approvalStatus: item.approvalStatus,
+          gmailSyncStatus: item.gmailSyncStatus,
+          sheetSyncStatus: item.sheetSyncStatus,
+        })),
+      ),
+      items,
+    };
+  } catch {
+    return {
+      summary: {
+        pendingApprovalCount: 0,
+        approvedCount: 0,
+        syncedDraftCount: 0,
+      },
+      items: [],
+    };
   }
 }
 
@@ -75,6 +146,13 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         },
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
+          include: {
+            gmailDraftLink: true,
+            sheetSyncRecords: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
         },
         diagnosticForms: {
           orderBy: { createdAt: "desc" },
@@ -146,6 +224,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         coldEmailShort: draft.coldEmailShort,
         coldEmailMedium: draft.coldEmailMedium,
         followUp1: draft.followUp1,
+        approvalStatus: draft.approvalStatus,
+        gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
+        sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
       })),
       diagnosticForms: company.diagnosticForms.map((form) => ({
         id: form.id,

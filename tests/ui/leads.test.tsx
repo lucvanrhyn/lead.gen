@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 
 import { LeadDetailView } from "@/components/leads/lead-detail-view";
 import { LeadTable } from "@/components/leads/lead-table";
+import { ApprovalQueue } from "@/components/leads/approval-queue";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -24,6 +25,7 @@ const leadRows = [
     contactsCount: 1,
     manualReviewRequired: false,
     status: "READY",
+    approvalStatus: "PENDING_APPROVAL",
   },
 ];
 
@@ -92,6 +94,9 @@ const leadDetail = {
         "I spent some time reviewing how Atlas Dental presents cosmetic and implant services online.",
       followUp1:
         "Following up in case a short conversion teardown for Atlas Dental's treatment pages would be useful.",
+      approvalStatus: "PENDING_APPROVAL",
+      gmailSyncStatus: "READY",
+      sheetSyncStatus: "NOT_READY",
     },
   ],
   diagnosticForms: [
@@ -155,5 +160,35 @@ describe("LeadDetailView", () => {
 
     expect(screen.getByText(/atlas dental workflow diagnostic/i)).toBeInTheDocument();
     expect(screen.getByText(/2-minute workflow diagnostic/i)).toBeInTheDocument();
+  });
+});
+
+describe("ApprovalQueue", () => {
+  it("renders pending drafts with sync badges", () => {
+    render(
+      <ApprovalQueue
+        items={[
+          {
+            draftId: "outreach-1",
+            leadId: "lead-1",
+            companyName: "Atlas Dental Group",
+            contactName: "Megan Jacobs",
+            emailSubject: "A quick idea for Atlas Dental bookings",
+            approvalStatus: "PENDING_APPROVAL",
+            gmailSyncStatus: "READY",
+            sheetSyncStatus: "NOT_READY",
+          },
+        ]}
+        summary={{
+          pendingApprovalCount: 1,
+          approvedCount: 0,
+          syncedDraftCount: 0,
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/approval queue/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/pending approval/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/gmail ready/i)).toBeInTheDocument();
   });
 });

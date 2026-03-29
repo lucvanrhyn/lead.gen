@@ -55,6 +55,19 @@ enum DiagnosticFormResponseStatus {
   REVIEWED
 }
 
+enum ApprovalStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum ExternalSyncStatus {
+  NOT_READY
+  READY
+  SYNCED
+  FAILED
+}
+
 enum CrawlPageType {
   HOMEPAGE
   SERVICES
@@ -273,14 +286,20 @@ model OutreachDraft {
   linkedinMessageSafe String @map("linkedin_message_safe")
   followUp1         String   @map("follow_up_1")
   followUp2         String   @map("follow_up_2")
+  approvalStatus    ApprovalStatus @default(PENDING_APPROVAL) @map("approval_status")
+  approvalNotes     String?  @map("approval_notes")
+  approvedAt        DateTime? @map("approved_at")
   rawPayload        Json?    @map("raw_payload")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
   company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   contact           Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  gmailDraftLink    GmailDraftLink?
+  sheetSyncRecords  SheetSyncRecord[]
 
   @@index([companyId])
   @@index([contactId])
+  @@index([approvalStatus])
   @@map("outreach_drafts")
 }
 
@@ -401,4 +420,36 @@ model DiagnosticFormLink {
 
   @@index([responseStatus])
   @@map("diagnostic_form_links")
+}
+
+model GmailDraftLink {
+  id             String             @id @default(cuid())
+  outreachDraftId String            @unique @map("outreach_draft_id")
+  gmailDraftId   String             @map("gmail_draft_id")
+  gmailThreadId  String?            @map("gmail_thread_id")
+  syncStatus     ExternalSyncStatus @default(NOT_READY) @map("sync_status")
+  lastSyncedAt   DateTime?          @map("last_synced_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  outreachDraft  OutreachDraft      @relation(fields: [outreachDraftId], references: [id], onDelete: Cascade)
+
+  @@index([syncStatus])
+  @@map("gmail_draft_links")
+}
+
+model SheetSyncRecord {
+  id             String             @id @default(cuid())
+  outreachDraftId String            @map("outreach_draft_id")
+  tabName        String             @map("tab_name")
+  rowKey         String             @map("row_key")
+  syncStatus     ExternalSyncStatus @default(NOT_READY) @map("sync_status")
+  lastSyncedAt   DateTime?          @map("last_synced_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  outreachDraft  OutreachDraft      @relation(fields: [outreachDraftId], references: [id], onDelete: Cascade)
+
+  @@unique([outreachDraftId, tabName])
+  @@index([outreachDraftId])
+  @@index([syncStatus])
+  @@map("sheet_sync_records")
 }

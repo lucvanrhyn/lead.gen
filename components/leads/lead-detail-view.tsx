@@ -195,8 +195,8 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               lead.outreachDrafts.map((draft) => (
                 <DetailCard
                   key={draft.id}
-                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\nFollow-up: ${draft.followUp1}`}
-                  label={draft.emailSubject2}
+                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\nFollow-up: ${draft.followUp1}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
+                  label={`${draft.emailSubject2} • ${draft.approvalStatus.replaceAll("_", " ")}`}
                   title={draft.emailSubject1}
                 />
               ))
