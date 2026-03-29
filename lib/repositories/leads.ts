@@ -194,6 +194,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
             },
           },
         },
+        linkedinTasks: {
+          orderBy: { createdAt: "desc" },
+        },
         diagnosticForms: {
           orderBy: { createdAt: "desc" },
           include: {
@@ -267,6 +270,16 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         approvalStatus: draft.approvalStatus,
         gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
         sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
+      })),
+      linkedinTasks: company.linkedinTasks.map((task) => ({
+        id: task.id,
+        contactName: task.contactName ?? undefined,
+        contactTitle: task.contactTitle ?? undefined,
+        lookupStatus: task.status,
+        profileUrl: task.linkedinProfileUrl ?? undefined,
+        connectionRequestNote: task.connectionRequestNote,
+        dmMessage: task.dmMessage,
+        followUpDm: task.followUpDm,
       })),
       diagnosticForms: company.diagnosticForms.map((form) => ({
         id: form.id,

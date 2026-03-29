@@ -222,7 +222,17 @@ export async function runCompanyFullPipeline(companyId: string) {
         },
       });
 
-      await persistOutreachDraft(companyId, outreach, contact.id);
+      await persistOutreachDraft({
+        companyId,
+        companyName: companyWithEvidence.name,
+        leadMagnetTitle: leadMagnet.title,
+        outreach,
+        contact: {
+          id: contact.id,
+          fullName: contact.fullName,
+          title: "title" in contact ? contact.title : undefined,
+        },
+      });
     }
     stages.push({ stage: "outreach", status: JobStatus.SUCCEEDED });
 

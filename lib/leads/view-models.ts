@@ -100,6 +100,16 @@ export type LeadDetailViewModel = {
     gmailSyncStatus: string;
     sheetSyncStatus: string;
   }>;
+  linkedinTasks: Array<{
+    id: string;
+    contactName?: string;
+    contactTitle?: string;
+    lookupStatus: string;
+    profileUrl?: string;
+    connectionRequestNote: string;
+    dmMessage: string;
+    followUpDm: string;
+  }>;
   diagnosticForms: Array<{
     id: string;
     formTitle: string;

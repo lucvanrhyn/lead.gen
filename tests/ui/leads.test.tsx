@@ -111,6 +111,20 @@ const leadDetail = {
       responseStatus: "LINK_ATTACHED",
     },
   ],
+  linkedinTasks: [
+    {
+      id: "linkedin-1",
+      contactName: "Megan Jacobs",
+      contactTitle: "Practice Manager",
+      lookupStatus: "MANUAL_LOOKUP_NEEDED",
+      profileUrl: undefined,
+      connectionRequestNote:
+        "Megan, I put together a short Atlas Dental Booking Funnel Teardown after spotting a likely booking leak at Atlas Dental.",
+      dmMessage:
+        "I put together a short teardown on how Atlas Dental could tighten the path from treatment-page visits to booked consults.",
+      followUpDm: "Happy to send the teardown if improving booking conversion is a priority.",
+    },
+  ],
 };
 
 describe("LeadTable", () => {
@@ -161,6 +175,18 @@ describe("LeadDetailView", () => {
 
     expect(screen.getByText(/atlas dental workflow diagnostic/i)).toBeInTheDocument();
     expect(screen.getByText(/2-minute workflow diagnostic/i)).toBeInTheDocument();
+  });
+
+  it("shows manual linkedin tasks with lookup-needed status", async () => {
+    const user = userEvent.setup();
+
+    render(<LeadDetailView lead={leadDetail} />);
+
+    await user.click(screen.getByRole("button", { name: /^linkedin$/i }));
+
+    expect(screen.getByText(/manual linkedin lookup needed/i)).toBeInTheDocument();
+    expect(screen.getByText(/atlas dental booking funnel teardown/i)).toBeInTheDocument();
+    expect(screen.getByText(/treatment-page visits to booked consults/i)).toBeInTheDocument();
   });
 });
 

@@ -68,7 +68,17 @@ export async function POST(
         : undefined,
     });
 
-    await persistOutreachDraft(company.id, outreach, contact.id);
+    await persistOutreachDraft({
+      companyId: company.id,
+      companyName: company.name,
+      leadMagnetTitle: latestLeadMagnet.title,
+      outreach,
+      contact: {
+        id: contact.id,
+        fullName: contact.fullName,
+        title: "title" in contact ? contact.title : undefined,
+      },
+    });
     drafts.push(outreach);
   }
 

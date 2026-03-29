@@ -1,4 +1,4 @@
-import { buildOutreachDraft } from "@/lib/ai/outreach";
+import { buildLinkedInTask, buildOutreachDraft } from "@/lib/ai/outreach";
 
 describe("buildOutreachDraft", () => {
   it("creates a safe outreach bundle from company and pain context", () => {
@@ -31,5 +31,22 @@ describe("buildOutreachDraft", () => {
 
     expect(draft.cold_email_short).toMatch(/2-minute workflow diagnostic/i);
     expect(draft.cold_email_medium).toMatch(/bottleneck assessment form/i);
+  });
+
+  it("creates a manual linkedin task with lookup-needed guidance", () => {
+    const task = buildLinkedInTask({
+      companyName: "Atlas Dental Group",
+      contactName: "Megan Jacobs",
+      contactTitle: "Practice Manager",
+      leadMagnetTitle: "Atlas Dental Booking Funnel Teardown",
+      linkedinMessageSafe:
+        "I put together a short teardown on how Atlas Dental could tighten the path from treatment-page visits to booked consults.",
+      followUp2: "Happy to send the teardown if improving booking conversion is a priority.",
+    });
+
+    expect(task.lookup_status).toBe("MANUAL_LOOKUP_NEEDED");
+    expect(task.connection_request_note).toMatch(/Atlas Dental Booking Funnel Teardown/i);
+    expect(task.dm_message).toMatch(/treatment-page visits/i);
+    expect(task.follow_up_dm).toMatch(/booking conversion/i);
   });
 });

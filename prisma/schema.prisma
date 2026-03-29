@@ -74,6 +74,14 @@ enum WorkspaceConnectionStatus {
   ERROR
 }
 
+enum LinkedInTaskStatus {
+  MANUAL_LOOKUP_NEEDED
+  READY_TO_SEND
+  SENT
+  REPLIED
+  SKIPPED
+}
+
 enum CrawlPageType {
   HOMEPAGE
   SERVICES
@@ -112,6 +120,7 @@ model Company {
   leadScores           LeadScore[]
   leadMagnets          LeadMagnet[]
   outreachDrafts       OutreachDraft[]
+  linkedinTasks        LinkedInTask[]
   batchLeads           BatchLead[]
   diagnosticForms      DiagnosticFormBlueprint[]
   sourceEvents         SourceEvent[]
@@ -140,6 +149,7 @@ model Contact {
   updatedAt              DateTime      @updatedAt @map("updated_at")
   company                Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   outreachDrafts         OutreachDraft[]
+  linkedinTasks          LinkedInTask[]
   sourceEvents           SourceEvent[]
 
   @@index([companyId])
@@ -302,11 +312,37 @@ model OutreachDraft {
   contact           Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   gmailDraftLink    GmailDraftLink?
   sheetSyncRecords  SheetSyncRecord[]
+  linkedinTask      LinkedInTask?
 
   @@index([companyId])
   @@index([contactId])
   @@index([approvalStatus])
   @@map("outreach_drafts")
+}
+
+model LinkedInTask {
+  id                    String             @id @default(cuid())
+  companyId             String             @map("company_id")
+  contactId             String?            @map("contact_id")
+  outreachDraftId       String             @unique @map("outreach_draft_id")
+  status                LinkedInTaskStatus @default(MANUAL_LOOKUP_NEEDED)
+  contactName           String?            @map("contact_name")
+  contactTitle          String?            @map("contact_title")
+  linkedinProfileUrl    String?            @map("linkedin_profile_url")
+  lookupHints           Json?              @map("lookup_hints")
+  connectionRequestNote String             @map("connection_request_note")
+  dmMessage             String             @map("dm_message")
+  followUpDm            String             @map("follow_up_dm")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+  company               Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contact               Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  outreachDraft         OutreachDraft      @relation(fields: [outreachDraftId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([contactId])
+  @@index([status])
+  @@map("linkedin_tasks")
 }
 
 model SourceEvent {

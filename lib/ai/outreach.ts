@@ -11,6 +11,20 @@ export const outreachSchema = z.object({
   follow_up_2: z.string(),
 });
 
+export const linkedInTaskSchema = z.object({
+  lookup_status: z.enum([
+    "MANUAL_LOOKUP_NEEDED",
+    "READY_TO_SEND",
+    "SENT",
+    "REPLIED",
+    "SKIPPED",
+  ]),
+  connection_request_note: z.string(),
+  dm_message: z.string(),
+  follow_up_dm: z.string(),
+  lookup_hints: z.array(z.string()),
+});
+
 export function buildOutreachDraft(input: {
   companyName: string;
   contactName?: string;
@@ -52,17 +66,49 @@ export function buildOutreachDraft(input: {
   });
 }
 
+export function buildLinkedInTask(input: {
+  companyName: string;
+  contactName?: string;
+  contactTitle?: string | null;
+  leadMagnetTitle: string;
+  linkedinMessageSafe: string;
+  followUp2: string;
+}) {
+  const introName = input.contactName ? `${input.contactName}, ` : "";
+  const titleHint = input.contactTitle ? `${input.contactTitle} at ${input.companyName}` : input.companyName;
+
+  return linkedInTaskSchema.parse({
+    lookup_status: "MANUAL_LOOKUP_NEEDED",
+    connection_request_note: `${introName}I put together a short ${input.leadMagnetTitle} after spotting a likely friction point at ${input.companyName}. Thought it may be relevant to your work as ${titleHint}.`,
+    dm_message: input.linkedinMessageSafe,
+    follow_up_dm: input.followUp2,
+    lookup_hints: [
+      input.contactName ? `${input.contactName} ${input.companyName} LinkedIn` : `${input.companyName} LinkedIn`,
+      input.contactTitle ? `${input.contactTitle} ${input.companyName} LinkedIn` : `${input.companyName} owner LinkedIn`,
+    ],
+  });
+}
+
 export async function persistOutreachDraft(
-  companyId: string,
-  outreach: z.infer<typeof outreachSchema>,
-  contactId?: string,
+  input: {
+    companyId: string;
+    companyName: string;
+    leadMagnetTitle: string;
+    outreach: z.infer<typeof outreachSchema>;
+    contact?: {
+      id?: string;
+      fullName?: string | null;
+      title?: string | null;
+    };
+  },
 ) {
+  const { companyId, companyName, leadMagnetTitle, outreach, contact } = input;
   const { db } = await import("@/lib/db");
 
-  await db.outreachDraft.create({
+  const draft = await db.outreachDraft.create({
     data: {
       companyId,
-      contactId,
+      contactId: contact?.id,
       emailSubject1: outreach.email_subject_1,
       emailSubject2: outreach.email_subject_2,
       coldEmailShort: outreach.cold_email_short,
@@ -72,6 +118,30 @@ export async function persistOutreachDraft(
       followUp2: outreach.follow_up_2,
       approvalStatus: "PENDING_APPROVAL",
       rawPayload: outreach,
+    },
+  });
+
+  const linkedInTask = buildLinkedInTask({
+    companyName,
+    contactName: contact?.fullName ?? undefined,
+    contactTitle: contact?.title ?? undefined,
+    leadMagnetTitle,
+    linkedinMessageSafe: outreach.linkedin_message_safe,
+    followUp2: outreach.follow_up_2,
+  });
+
+  await db.linkedInTask.create({
+    data: {
+      companyId,
+      contactId: contact?.id,
+      outreachDraftId: draft.id,
+      status: linkedInTask.lookup_status,
+      contactName: contact?.fullName ?? undefined,
+      contactTitle: contact?.title ?? undefined,
+      lookupHints: linkedInTask.lookup_hints,
+      connectionRequestNote: linkedInTask.connection_request_note,
+      dmMessage: linkedInTask.dm_message,
+      followUpDm: linkedInTask.follow_up_dm,
     },
   });
 
@@ -85,6 +155,7 @@ export async function persistOutreachDraft(
       requestedBy: "api.leads.outreach",
       resultSummary: {
         primary_subject: outreach.email_subject_1,
+        linkedin_lookup_status: linkedInTask.lookup_status,
       },
     },
   });

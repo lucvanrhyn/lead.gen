@@ -39,6 +39,7 @@ async function main() {
   await prisma.sheetSyncRecord.deleteMany();
   await prisma.gmailDraftLink.deleteMany();
   await prisma.googleWorkspaceConnection.deleteMany();
+  await prisma.linkedInTask.deleteMany();
   await prisma.batchLead.deleteMany();
   await prisma.leadBatch.deleteMany();
   await prisma.outreachDraft.deleteMany();
@@ -209,7 +210,7 @@ async function main() {
   });
 
   if (company.contacts[0]) {
-    await prisma.outreachDraft.create({
+    const pendingDraft = await prisma.outreachDraft.create({
       data: {
         companyId: company.id,
         contactId: company.contacts[0].id,
@@ -226,6 +227,27 @@ async function main() {
         followUp2:
           "Happy to send the teardown if improving booking conversion is a priority this quarter.",
         approvalStatus: "PENDING_APPROVAL",
+      },
+    });
+
+    await prisma.linkedInTask.create({
+      data: {
+        companyId: company.id,
+        contactId: company.contacts[0].id,
+        outreachDraftId: pendingDraft.id,
+        status: "MANUAL_LOOKUP_NEEDED",
+        contactName: company.contacts[0].fullName,
+        contactTitle: company.contacts[0].title,
+        lookupHints: [
+          "Megan Jacobs Atlas Dental Group LinkedIn",
+          "Practice Manager Atlas Dental Group LinkedIn",
+        ],
+        connectionRequestNote:
+          "Megan Jacobs, I put together a short Atlas Dental Booking Funnel Teardown after spotting a likely booking leak at Atlas Dental.",
+        dmMessage:
+          "I put together a short teardown on how Atlas Dental could tighten the path from treatment-page visits to booked consults. Happy to send it over if helpful.",
+        followUpDm:
+          "Happy to send the teardown if improving booking conversion is a priority this quarter.",
       },
     });
 
@@ -264,6 +286,27 @@ async function main() {
         tabName: "Drafts",
         rowKey: "draft-demo-1",
         syncStatus: "READY",
+      },
+    });
+
+    await prisma.linkedInTask.create({
+      data: {
+        companyId: company.id,
+        contactId: company.contacts[0].id,
+        outreachDraftId: approvedDraft.id,
+        status: "MANUAL_LOOKUP_NEEDED",
+        contactName: company.contacts[0].fullName,
+        contactTitle: company.contacts[0].title,
+        lookupHints: [
+          "Megan Jacobs Atlas Dental Group LinkedIn",
+          "Practice Manager Atlas Dental Group LinkedIn",
+        ],
+        connectionRequestNote:
+          "Megan Jacobs, I put together a short Atlas Dental workflow diagnostic after spotting a likely friction point at Atlas Dental.",
+        dmMessage:
+          "I made a quick booking workflow diagnostic for Atlas Dental. Happy to send it over if useful.",
+        followUpDm:
+          "Happy to send the diagnostic if tightening patient follow-up is a priority.",
       },
     });
   }

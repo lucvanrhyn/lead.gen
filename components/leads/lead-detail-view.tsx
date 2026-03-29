@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
+import { Linkedin, Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
 
 import { ManualReviewToggle } from "@/components/leads/manual-review-toggle";
 import { PipelineActions } from "@/components/leads/pipeline-actions";
@@ -15,6 +15,7 @@ const tabs = [
   { id: "tech", label: "Tech", icon: Wrench },
   { id: "news", label: "News", icon: Newspaper },
   { id: "pains", label: "Pains", icon: Sparkles },
+  { id: "linkedin", label: "LinkedIn", icon: Linkedin },
   { id: "outreach", label: "Outreach", icon: Mail },
 ] as const;
 
@@ -202,6 +203,27 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               ))
             ) : (
               <EmptyPanel message="No outreach drafts generated yet." />
+            )}
+          </div>
+        ) : null}
+
+        {activeTab === "linkedin" ? (
+          <div className="grid gap-4">
+            {lead.linkedinTasks.length > 0 ? (
+              lead.linkedinTasks.map((task) => (
+                <DetailCard
+                  key={task.id}
+                  body={`${task.contactTitle ? `${task.contactTitle}. ` : ""}${task.profileUrl ? `Profile: ${task.profileUrl}. ` : ""}${task.connectionRequestNote}\n\nDM: ${task.dmMessage}\n\nFollow-up: ${task.followUpDm}`}
+                  label={
+                    task.lookupStatus === "MANUAL_LOOKUP_NEEDED"
+                      ? "Manual LinkedIn lookup needed"
+                      : task.lookupStatus.replaceAll("_", " ")
+                  }
+                  title={task.contactName ?? "Company-level LinkedIn task"}
+                />
+              ))
+            ) : (
+              <EmptyPanel message="No LinkedIn tasks generated yet." />
             )}
           </div>
         ) : null}
