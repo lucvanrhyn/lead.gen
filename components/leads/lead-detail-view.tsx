@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
 
 import { ManualReviewToggle } from "@/components/leads/manual-review-toggle";
+import { PipelineActions } from "@/components/leads/pipeline-actions";
 import { type LeadDetailViewModel } from "@/lib/leads/view-models";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,11 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
 
   return (
     <div className="space-y-6">
+      <PipelineActions
+        hasWebsite={lead.company.hasWebsite}
+        leadId={lead.company.id}
+      />
+
       <section className="rounded-[3rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.94)] p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-4">
@@ -161,12 +167,24 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
 
         {activeTab === "outreach" ? (
           <div className="grid gap-4">
+            {lead.leadMagnets.length > 0 ? (
+              lead.leadMagnets.map((leadMagnet) => (
+                <DetailCard
+                  key={leadMagnet.id}
+                  body={`${leadMagnet.summary} ${leadMagnet.whyItMatchesTheLead} Delivery: ${leadMagnet.suggestedDeliveryFormat}.`}
+                  label={leadMagnet.type}
+                  title={leadMagnet.title}
+                />
+              ))
+            ) : (
+              <EmptyPanel message="No lead magnet generated yet." />
+            )}
             {lead.outreachDrafts.length > 0 ? (
               lead.outreachDrafts.map((draft) => (
                 <DetailCard
                   key={draft.id}
-                  body={draft.coldEmailShort}
-                  label="Short draft"
+                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\nFollow-up: ${draft.followUp1}`}
+                  label={draft.emailSubject2}
                   title={draft.emailSubject1}
                 />
               ))

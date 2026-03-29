@@ -70,6 +70,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        leadMagnets: {
+          orderBy: { createdAt: "desc" },
+        },
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
         },
@@ -93,6 +96,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         sourceConfidenceLabel: formatConfidence(company.sourceConfidence),
         manualReviewRequired: company.manualReviewRequired,
         status: company.status,
+        hasWebsite: Boolean(company.website),
       },
       contacts: company.contacts.map((contact) => ({
         id: contact.id,
@@ -121,10 +125,21 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         businessImpact: pain.businessImpact,
         recommendedServiceAngle: pain.recommendedServiceAngle,
       })),
+      leadMagnets: company.leadMagnets.map((leadMagnet) => ({
+        id: leadMagnet.id,
+        title: leadMagnet.title,
+        type: leadMagnet.type,
+        summary: leadMagnet.summary,
+        whyItMatchesTheLead: leadMagnet.whyItMatchesTheLead,
+        suggestedDeliveryFormat: leadMagnet.suggestedDeliveryFormat,
+      })),
       outreachDrafts: company.outreachDrafts.map((draft) => ({
         id: draft.id,
         emailSubject1: draft.emailSubject1,
+        emailSubject2: draft.emailSubject2,
         coldEmailShort: draft.coldEmailShort,
+        coldEmailMedium: draft.coldEmailMedium,
+        followUp1: draft.followUp1,
       })),
     };
   } catch {

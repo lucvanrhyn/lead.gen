@@ -26,6 +26,7 @@ export type LeadDetailViewModel = {
     sourceConfidenceLabel: string;
     manualReviewRequired: boolean;
     status: string;
+    hasWebsite: boolean;
   };
   contacts: Array<{
     id: string;
@@ -54,9 +55,20 @@ export type LeadDetailViewModel = {
     businessImpact: string;
     recommendedServiceAngle: string;
   }>;
+  leadMagnets: Array<{
+    id: string;
+    title: string;
+    type: string;
+    summary: string;
+    whyItMatchesTheLead: string;
+    suggestedDeliveryFormat: string;
+  }>;
   outreachDrafts: Array<{
     id: string;
     emailSubject1: string;
+    emailSubject2: string;
     coldEmailShort: string;
+    coldEmailMedium: string;
+    followUp1: string;
   }>;
 };

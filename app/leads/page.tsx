@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { DiscoveryForm } from "@/components/leads/discovery-form";
 import { LeadTable } from "@/components/leads/lead-table";
 import { getLeadSummaries } from "@/lib/repositories/leads";
 
@@ -27,10 +28,11 @@ export default async function LeadsPage() {
             </Link>
           </div>
           <p className="max-w-3xl text-base leading-8 text-[rgba(245,235,212,0.72)]">
-            Review discovered companies, inspect score and evidence strength, and jump into the full detail workspace for enrichment and follow-up.
+            Choose an industry and region, generate a focused lead batch, then open any lead to enrich, score, create a lead magnet, and draft personalized outreach.
           </p>
         </div>
 
+        <DiscoveryForm />
         <LeadTable leads={leads} />
       </div>
     </main>

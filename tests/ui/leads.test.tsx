@@ -40,6 +40,7 @@ const leadDetail = {
     sourceConfidenceLabel: "0.86",
     manualReviewRequired: false,
     status: "READY",
+    hasWebsite: true,
   },
   contacts: [
     {
@@ -69,12 +70,28 @@ const leadDetail = {
       recommendedServiceAngle: "Conversion-focused website teardown for treatment pages",
     },
   ],
+  leadMagnets: [
+    {
+      id: "magnet-1",
+      title: "Atlas Dental Booking Funnel Teardown",
+      type: "website conversion teardown",
+      summary: "A focused review of homepage-to-booking friction for cosmetic and implant leads.",
+      whyItMatchesTheLead:
+        "The site positions high-value services prominently, which creates a strong case for conversion optimization.",
+      suggestedDeliveryFormat: "5-slide PDF",
+    },
+  ],
   outreachDrafts: [
     {
       id: "outreach-1",
       emailSubject1: "A quick idea for Atlas Dental bookings",
+      emailSubject2: "One conversion win for your treatment pages",
       coldEmailShort:
         "I noticed Atlas Dental highlights high-value services and quick bookings.",
+      coldEmailMedium:
+        "I spent some time reviewing how Atlas Dental presents cosmetic and implant services online.",
+      followUp1:
+        "Following up in case a short conversion teardown for Atlas Dental's treatment pages would be useful.",
     },
   ],
 };
@@ -97,11 +114,22 @@ describe("LeadDetailView", () => {
 
     expect(screen.getByText(/multi-location dental practice/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /pains/i }));
+    await user.click(screen.getByRole("button", { name: /^pains$/i }));
 
     expect(
       screen.getByText(/inconsistent booking conversion across service lines/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/conversion-focused website teardown/i)).toBeInTheDocument();
+  });
+
+  it("shows the lead magnet inside outreach content", async () => {
+    const user = userEvent.setup();
+
+    render(<LeadDetailView lead={leadDetail} />);
+
+    await user.click(screen.getByRole("button", { name: /^outreach$/i }));
+
+    expect(screen.getByText(/atlas dental booking funnel teardown/i)).toBeInTheDocument();
+    expect(screen.getByText(/a quick idea for atlas dental bookings/i)).toBeInTheDocument();
   });
 });
