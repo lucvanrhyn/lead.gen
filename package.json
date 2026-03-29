@@ -17,7 +17,13 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:push": "prisma db push",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "pw": "playwright-cli",
+    "pw:help": "playwright-cli --help",
+    "pw:list": "playwright-cli list",
+    "pw:show": "playwright-cli show",
+    "pw:install-skills": "playwright-cli install --skills",
+    "pw:install-browser": "playwright-cli install-browser"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.6.0",
@@ -35,6 +41,7 @@
     "zod": "^4.1.11"
   },
   "devDependencies": {
+    "@playwright/cli": "^0.1.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
