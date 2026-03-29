@@ -51,6 +51,7 @@ async function main() {
     data: {
       name: demoGraph.company.name,
       website: demoGraph.company.website,
+      phone: "+27 21 555 0133",
       normalizedDomain: "atlasdental.co.za",
       industry: demoGraph.company.industry,
       locationSummary: demoGraph.company.location,

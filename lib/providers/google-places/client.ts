@@ -256,6 +256,7 @@ export async function persistGooglePlacesResults(
       create: {
         name: candidate.name,
         website: candidate.website,
+        phone: candidate.phone,
         normalizedDomain: candidate.website
           ? new URL(candidate.website).hostname.replace(/^www\./, "")
           : null,
@@ -268,6 +269,7 @@ export async function persistGooglePlacesResults(
       update: {
         name: candidate.name,
         website: candidate.website,
+        phone: candidate.phone,
         normalizedDomain: candidate.website
           ? new URL(candidate.website).hostname.replace(/^www\./, "")
           : null,
