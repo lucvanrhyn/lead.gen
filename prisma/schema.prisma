@@ -68,6 +68,12 @@ enum ExternalSyncStatus {
   FAILED
 }
 
+enum WorkspaceConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
 enum CrawlPageType {
   HOMEPAGE
   SERVICES
@@ -452,4 +458,22 @@ model SheetSyncRecord {
   @@index([outreachDraftId])
   @@index([syncStatus])
   @@map("sheet_sync_records")
+}
+
+model GoogleWorkspaceConnection {
+  id                   String                    @id @default(cuid())
+  provider             String                    @default("google_workspace")
+  email                String?
+  scopes               Json
+  encryptedAccessToken String?                   @map("encrypted_access_token")
+  encryptedRefreshToken String?                  @map("encrypted_refresh_token")
+  accessTokenExpiresAt DateTime?                 @map("access_token_expires_at")
+  status               WorkspaceConnectionStatus @default(DISCONNECTED)
+  lastError            String?                   @map("last_error")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+
+  @@unique([provider])
+  @@index([status])
+  @@map("google_workspace_connections")
 }

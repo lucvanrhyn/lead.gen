@@ -9,30 +9,54 @@ import { type ApprovalQueueItem, type ApprovalQueueSummary } from "@/lib/leads/v
 export function ApprovalQueue({
   summary,
   items,
+  workspaceConnected,
 }: {
   summary: ApprovalQueueSummary;
   items: ApprovalQueueItem[];
+  workspaceConnected: boolean;
 }) {
   const router = useRouter();
   const [pendingDraftId, setPendingDraftId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleAction(draftId: string, action: "approve" | "reject") {
+  function handleAction(
+    draftId: string,
+    action: "approve" | "reject" | "create-gmail-draft" | "sync-google-sheet",
+  ) {
     setPendingDraftId(draftId);
     setMessage(null);
+    setError(null);
 
     startTransition(async () => {
-      await fetch(`/api/outreach-drafts/${draftId}/${action}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
+      try {
+        const response = await fetch(`/api/outreach-drafts/${draftId}/${action}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+        const payload = await response.json().catch(() => ({}));
 
-      setMessage(action === "approve" ? "Draft approved for Gmail handoff." : "Draft rejected.");
-      setPendingDraftId(null);
-      router.refresh();
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Queue action failed.");
+        }
+
+        const nextMessage = {
+          approve: "Draft approved for Gmail handoff.",
+          reject: "Draft rejected.",
+          "create-gmail-draft": "Gmail draft created.",
+          "sync-google-sheet": "Draft synced to Google Sheets.",
+        } as const;
+
+        setMessage(nextMessage[action]);
+        router.refresh();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Queue action failed.");
+      } finally {
+        setPendingDraftId(null);
+      }
     });
   }
 
@@ -111,6 +135,33 @@ export function ApprovalQueue({
                         Reject
                       </button>
                     </div>
+                  ) : item.approvalStatus === "APPROVED" ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-full bg-cream px-4 py-3 text-sm font-semibold text-[#120f0c] disabled:opacity-60"
+                        disabled={
+                          pendingDraftId === item.draftId ||
+                          !workspaceConnected ||
+                          item.gmailSyncStatus === "SYNCED"
+                        }
+                        onClick={() => handleAction(item.draftId, "create-gmail-draft")}
+                        type="button"
+                      >
+                        {item.gmailSyncStatus === "SYNCED" ? "Gmail synced" : "Create Gmail draft"}
+                      </button>
+                      <button
+                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        disabled={
+                          pendingDraftId === item.draftId ||
+                          !workspaceConnected ||
+                          item.sheetSyncStatus === "SYNCED"
+                        }
+                        onClick={() => handleAction(item.draftId, "sync-google-sheet")}
+                        type="button"
+                      >
+                        {item.sheetSyncStatus === "SYNCED" ? "Sheets synced" : "Sync to Sheets"}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               </article>
@@ -118,6 +169,7 @@ export function ApprovalQueue({
           </div>
         )}
         {message ? <p className="text-sm text-[#c8e2c0]">{message}</p> : null}
+        {error ? <p className="text-sm text-[#f1b08f]">{error}</p> : null}
       </div>
     </section>
   );

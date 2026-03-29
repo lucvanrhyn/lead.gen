@@ -12,6 +12,7 @@ Apollo-first lead discovery and enrichment for high-quality B2B outreach.
 - Lead scoring, lead magnets, and outreach generation
 - Batch auto-run orchestration from discovery
 - Diagnostic Google Form blueprint generation and storage
+- Google Workspace handoff for Gmail drafts and Sheets sync
 
 ## Local setup
 1. Copy `.env.example` to `.env`
@@ -61,6 +62,9 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 - `outreach_drafts`
 - `diagnostic_form_blueprints`
 - `diagnostic_form_links`
+- `gmail_draft_links`
+- `sheet_sync_records`
+- `google_workspace_connections`
 - `source_events`
 - `enrichment_jobs`
 
@@ -85,4 +89,26 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 - Approving a draft marks it ready for Gmail handoff and stores Gmail sync metadata separately from the draft body.
 - Google Sheets sync metadata is tracked per draft and per target tab so the app can remain the source of truth while Sheets acts as the operator ledger.
 
-The next slices build on this with real Gmail draft delivery, Sheets row syncing, LinkedIn manual task generation, and follow-up automation.
+## Google Workspace setup
+
+To enable real Gmail draft handoff and Google Sheets syncing:
+
+1. In Google Cloud, enable the Gmail API and Google Sheets API.
+2. Create an OAuth client for a web application.
+3. Register this redirect URI:
+   - `http://localhost:3000/api/google-workspace/callback`
+4. Set these env vars in `.env` and `.env.local`:
+   - `GOOGLE_OAUTH_CLIENT_ID`
+   - `GOOGLE_OAUTH_CLIENT_SECRET`
+   - `GOOGLE_OAUTH_REDIRECT_URI`
+   - `GOOGLE_SHEETS_SPREADSHEET_ID`
+   - `GOOGLE_WORKSPACE_TOKEN_SECRET`
+
+`GOOGLE_WORKSPACE_TOKEN_SECRET` should be a long random string. The app uses it to encrypt stored Google access and refresh tokens before writing them to Postgres.
+
+Once configured:
+- open `/leads`
+- use the `Connect Google` action in the `Google Workspace` card
+- approve an outreach draft
+- use `Create Gmail draft` to push it into Gmail
+- use `Sync to Sheets` to append or update the `Drafts` tab in your configured spreadsheet

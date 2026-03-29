@@ -20,6 +20,14 @@ export type ApprovalQueueSummary = {
   syncedDraftCount: number;
 };
 
+export type GoogleWorkspaceStatusViewModel = {
+  status: "CONFIG_INCOMPLETE" | "DISCONNECTED" | "ERROR" | "CONNECTED";
+  canStartOAuth: boolean;
+  connectedEmail?: string;
+  title: string;
+  description: string;
+};
+
 export type ApprovalQueueItem = {
   draftId: string;
   leadId: string;

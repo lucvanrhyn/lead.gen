@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { LeadDetailView } from "@/components/leads/lead-detail-view";
 import { LeadTable } from "@/components/leads/lead-table";
 import { ApprovalQueue } from "@/components/leads/approval-queue";
+import { GoogleWorkspaceStatus } from "@/components/leads/google-workspace-status";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -184,11 +185,60 @@ describe("ApprovalQueue", () => {
           approvedCount: 0,
           syncedDraftCount: 0,
         }}
+        workspaceConnected={false}
       />,
     );
 
     expect(screen.getByText(/approval queue/i)).toBeInTheDocument();
     expect(screen.getAllByText(/pending approval/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/gmail ready/i)).toBeInTheDocument();
+  });
+
+  it("shows Gmail and Sheets actions for approved drafts when workspace is connected", () => {
+    render(
+      <ApprovalQueue
+        items={[
+          {
+            draftId: "outreach-1",
+            leadId: "lead-1",
+            companyName: "Atlas Dental Group",
+            contactName: "Megan Jacobs",
+            emailSubject: "A quick idea for Atlas Dental bookings",
+            approvalStatus: "APPROVED",
+            gmailSyncStatus: "READY",
+            sheetSyncStatus: "NOT_READY",
+          },
+        ]}
+        summary={{
+          pendingApprovalCount: 0,
+          approvedCount: 1,
+          syncedDraftCount: 0,
+        }}
+        workspaceConnected
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /create gmail draft/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sync to sheets/i })).toBeInTheDocument();
+  });
+});
+
+describe("GoogleWorkspaceStatus", () => {
+  it("renders the connected workspace summary", () => {
+    render(
+      <GoogleWorkspaceStatus
+        workspace={{
+          status: "CONNECTED",
+          canStartOAuth: true,
+          connectedEmail: "operator@example.com",
+          title: "Google Workspace connected",
+          description: "Approved drafts can now create Gmail drafts and sync to your operator sheet.",
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/google workspace connected/i)).toBeInTheDocument();
+    expect(screen.getByText(/operator@example.com/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /reconnect google/i })).toBeInTheDocument();
   });
 });

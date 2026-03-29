@@ -38,6 +38,7 @@ async function main() {
   await prisma.diagnosticFormBlueprint.deleteMany();
   await prisma.sheetSyncRecord.deleteMany();
   await prisma.gmailDraftLink.deleteMany();
+  await prisma.googleWorkspaceConnection.deleteMany();
   await prisma.batchLead.deleteMany();
   await prisma.leadBatch.deleteMany();
   await prisma.outreachDraft.deleteMany();
@@ -321,6 +322,14 @@ async function main() {
       blueprintId: blueprint.id,
       url: "https://forms.gle/example-atlas-dental",
       responseStatus: "LINK_ATTACHED",
+    },
+  });
+
+  await prisma.googleWorkspaceConnection.create({
+    data: {
+      provider: "google_workspace",
+      scopes: [],
+      status: "DISCONNECTED",
     },
   });
 }

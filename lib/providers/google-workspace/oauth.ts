@@ -1,0 +1,152 @@
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+
+import {
+  type GoogleWorkspaceConnection,
+  WorkspaceConnectionStatus,
+} from "@prisma/client";
+import { google } from "googleapis";
+
+import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/domain/google-workspace";
+
+type GoogleWorkspaceEnv = NodeJS.ProcessEnv;
+
+function getRequiredEnvValue(name: keyof GoogleWorkspaceEnv, env: GoogleWorkspaceEnv = process.env) {
+  const value = env[name];
+  if (!value) {
+    throw new Error(`Missing Google Workspace configuration: ${name}.`);
+  }
+
+  return value;
+}
+
+function getTokenEncryptionKey(env: GoogleWorkspaceEnv = process.env) {
+  return createHash("sha256")
+    .update(getRequiredEnvValue("GOOGLE_WORKSPACE_TOKEN_SECRET", env))
+    .digest();
+}
+
+export function encryptGoogleWorkspaceToken(
+  token: string,
+  env: GoogleWorkspaceEnv = process.env,
+) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", getTokenEncryptionKey(env), iv);
+  const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return `v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${encrypted.toString("base64url")}`;
+}
+
+export function decryptGoogleWorkspaceToken(
+  payload: string,
+  env: GoogleWorkspaceEnv = process.env,
+) {
+  const [version, iv, tag, encrypted] = payload.split(":");
+
+  if (version !== "v1" || !iv || !tag || !encrypted) {
+    throw new Error("Invalid Google Workspace token payload.");
+  }
+
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    getTokenEncryptionKey(env),
+    Buffer.from(iv, "base64url"),
+  );
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+
+  return Buffer.concat([
+    decipher.update(Buffer.from(encrypted, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+export function createGoogleOAuthClient(env: GoogleWorkspaceEnv = process.env) {
+  return new google.auth.OAuth2(
+    getRequiredEnvValue("GOOGLE_OAUTH_CLIENT_ID", env),
+    getRequiredEnvValue("GOOGLE_OAUTH_CLIENT_SECRET", env),
+    getRequiredEnvValue("GOOGLE_OAUTH_REDIRECT_URI", env),
+  );
+}
+
+export function createGoogleWorkspaceAuthUrl(state: string, env: GoogleWorkspaceEnv = process.env) {
+  return createGoogleOAuthClient(env).generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: [...GOOGLE_WORKSPACE_SCOPES],
+    state,
+  });
+}
+
+export async function exchangeGoogleWorkspaceCode(
+  code: string,
+  env: GoogleWorkspaceEnv = process.env,
+) {
+  const client = createGoogleOAuthClient(env);
+  const { tokens } = await client.getToken(code);
+
+  if (!tokens.access_token) {
+    throw new Error("Google OAuth exchange did not return an access token.");
+  }
+
+  return {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+    scopes: tokens.scope?.split(" ").filter(Boolean) ?? [...GOOGLE_WORKSPACE_SCOPES],
+  };
+}
+
+export async function fetchGoogleWorkspaceProfile(
+  accessToken: string,
+  env: GoogleWorkspaceEnv = process.env,
+) {
+  const auth = createGoogleOAuthClient(env);
+  auth.setCredentials({ access_token: accessToken });
+  const gmail = google.gmail({ version: "v1", auth });
+  const response = await gmail.users.getProfile({ userId: "me" });
+
+  return response.data;
+}
+
+export async function createAuthorizedGoogleClient(
+  connection: Pick<
+    GoogleWorkspaceConnection,
+    "encryptedAccessToken" | "encryptedRefreshToken" | "accessTokenExpiresAt" | "status"
+  >,
+  env: GoogleWorkspaceEnv = process.env,
+) {
+  if (connection.status !== WorkspaceConnectionStatus.CONNECTED) {
+    throw new Error("Google Workspace is not connected.");
+  }
+
+  const auth = createGoogleOAuthClient(env);
+  auth.setCredentials({
+    access_token: connection.encryptedAccessToken
+      ? decryptGoogleWorkspaceToken(connection.encryptedAccessToken, env)
+      : undefined,
+    refresh_token: connection.encryptedRefreshToken
+      ? decryptGoogleWorkspaceToken(connection.encryptedRefreshToken, env)
+      : undefined,
+    expiry_date: connection.accessTokenExpiresAt?.getTime(),
+  });
+
+  if (!auth.credentials.refresh_token) {
+    throw new Error("Google Workspace refresh token is missing. Reconnect the account.");
+  }
+
+  const shouldRefresh =
+    !auth.credentials.access_token ||
+    !connection.accessTokenExpiresAt ||
+    connection.accessTokenExpiresAt.getTime() <= Date.now() + 60_000;
+
+  if (shouldRefresh) {
+    const refreshed = await auth.refreshAccessToken();
+    auth.setCredentials({
+      ...auth.credentials,
+      access_token: refreshed.credentials.access_token ?? auth.credentials.access_token,
+      expiry_date: refreshed.credentials.expiry_date ?? auth.credentials.expiry_date,
+    });
+  }
+
+  return auth;
+}

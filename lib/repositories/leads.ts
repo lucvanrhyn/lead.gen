@@ -1,8 +1,14 @@
 import { db } from "@/lib/db";
+import {
+  deriveGoogleWorkspaceState,
+  getGoogleWorkspaceEnvState,
+  getGoogleWorkspaceStatusCopy,
+} from "@/lib/domain/google-workspace";
 import { deriveApprovalQueueSummary } from "@/lib/domain/outreach-ops";
 import {
   type ApprovalQueueItem,
   type ApprovalQueueSummary,
+  type GoogleWorkspaceStatusViewModel,
   type LeadDetailViewModel,
   type LeadTableRow,
 } from "@/lib/leads/view-models";
@@ -116,6 +122,40 @@ export async function getApprovalQueue(): Promise<{
         syncedDraftCount: 0,
       },
       items: [],
+    };
+  }
+}
+
+export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusViewModel> {
+  try {
+    const connection = await db.googleWorkspaceConnection.findUnique({
+      where: { provider: "google_workspace" },
+      select: {
+        status: true,
+        email: true,
+      },
+    });
+
+    const state = deriveGoogleWorkspaceState({
+      ...getGoogleWorkspaceEnvState(),
+      connection,
+    });
+    const copy = getGoogleWorkspaceStatusCopy(state.status);
+
+    return {
+      ...state,
+      ...copy,
+    };
+  } catch {
+    const state = deriveGoogleWorkspaceState({
+      ...getGoogleWorkspaceEnvState(),
+      connection: null,
+    });
+    const copy = getGoogleWorkspaceStatusCopy(state.status);
+
+    return {
+      ...state,
+      ...copy,
     };
   }
 }
