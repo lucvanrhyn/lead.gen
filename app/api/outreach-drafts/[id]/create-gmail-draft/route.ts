@@ -2,6 +2,7 @@ import { ExternalSyncStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { resolveAppUrl } from "@/lib/domain/app-url";
 import {
   appendOutreachDeliveryLinks,
   createGoogleWorkspaceGmailDraft,
@@ -63,7 +64,7 @@ export async function POST(
   try {
     const auth = await createAuthorizedGoogleClient(connection);
     const assetUrl = draft.leadMagnetAsset?.slug
-      ? new URL(`/assets/${draft.leadMagnetAsset.slug}`, _request.url).toString()
+      ? resolveAppUrl(`/assets/${draft.leadMagnetAsset.slug}`, process.env, _request)
       : null;
     const gmailDraft = await createGoogleWorkspaceGmailDraft({
       auth,

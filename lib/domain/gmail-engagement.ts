@@ -7,13 +7,13 @@ import {
 
 import { type GmailThreadSnapshot } from "@/lib/providers/google-workspace/gmail";
 
-type DatabaseClient = Pick<
+export type GmailEngagementDatabaseClient = Pick<
   PrismaClient,
   "$transaction" | "gmailDraftLink" | "outreachDraft" | "outreachEngagementEvent"
 >;
 
 export async function syncGmailReplyStateForDraft(input: {
-  db: DatabaseClient;
+  db: GmailEngagementDatabaseClient;
   draft: {
     id: string;
     companyId: string;

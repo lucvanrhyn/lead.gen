@@ -2,6 +2,7 @@ import { ExternalSyncStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { resolveAppUrl } from "@/lib/domain/app-url";
 import {
   buildCompanySheetRow,
   buildContactSheetRow,
@@ -74,7 +75,7 @@ export async function POST(
 
   try {
     const auth = await createAuthorizedGoogleClient(connection);
-    const leadUrl = new URL(`/leads/${draft.companyId}`, request.url).toString();
+    const leadUrl = resolveAppUrl(`/leads/${draft.companyId}`, process.env, request);
     const syncRecordByTab = new Map(
       draft.sheetSyncRecords.map((record) => [record.tabName, record]),
     );

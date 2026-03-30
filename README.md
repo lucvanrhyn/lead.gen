@@ -26,6 +26,12 @@ Apollo-first lead discovery and enrichment for high-quality B2B outreach.
 
 If Docker is available, `docker compose up postgres -d` will start the expected local database service.
 
+Set `APP_BASE_URL` to the canonical app URL for link generation:
+- local: `http://localhost:3000`
+- production: your Vercel or custom domain URL
+
+The app uses `APP_BASE_URL` for Gmail draft links, hosted lead-magnet links, and operator-ledger URLs. If it is missing, server routes fall back to the current request origin.
+
 For Supabase-backed environments, prefer the session pooler connection string (`aws-<region>.pooler.supabase.com:5432`) for Prisma, the Next.js app, and `pg-boss`. The direct `db.<project-ref>.supabase.co:5432` hostname can be IPv6-only and may not resolve from every local environment.
 
 ## Playwright CLI

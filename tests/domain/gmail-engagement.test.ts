@@ -10,7 +10,10 @@ vi.mock("@/lib/providers/google-workspace/gmail", () => ({
   // The helper test only needs the thread snapshot type at runtime.
 }));
 
-import { syncGmailReplyStateForDraft } from "@/lib/domain/gmail-engagement";
+import {
+  type GmailEngagementDatabaseClient,
+  syncGmailReplyStateForDraft,
+} from "@/lib/domain/gmail-engagement";
 
 describe("syncGmailReplyStateForDraft", () => {
   beforeEach(() => {
@@ -39,7 +42,7 @@ describe("syncGmailReplyStateForDraft", () => {
       }),
     );
 
-    const db: Parameters<typeof syncGmailReplyStateForDraft>[0]["db"] = {
+    const db = {
       gmailDraftLink: {
         upsert: gmailDraftLinkUpsert,
       },
@@ -50,7 +53,7 @@ describe("syncGmailReplyStateForDraft", () => {
         updateMany: outreachDraftUpdateMany,
       },
       $transaction: transaction,
-    };
+    } as unknown as GmailEngagementDatabaseClient;
 
     const result = await syncGmailReplyStateForDraft({
       db,
