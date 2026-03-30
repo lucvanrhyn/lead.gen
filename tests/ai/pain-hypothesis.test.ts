@@ -81,8 +81,6 @@ describe("generatePainHypothesis", () => {
             markdown: "Top Law Firms In Johannesburg | Specialist Lawyers | Burger Huyser",
           },
         ],
-        technologyProfiles: [],
-        newsMentions: [],
       },
       {
         apiKey: "openai_test_key",

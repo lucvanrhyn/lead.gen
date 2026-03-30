@@ -18,8 +18,6 @@ describe("scoreLeadContext", () => {
       painConfidence: 0.72,
       painEvidenceCount: 2,
       insufficientEvidence: false,
-      hasTechnologyProfile: true,
-      newsMentionsCount: 1,
     });
 
     expect(score.total_score).toBeGreaterThan(0);
@@ -44,8 +42,6 @@ describe("scoreLeadContext", () => {
       painConfidence: 0.72,
       painEvidenceCount: 2,
       insufficientEvidence: false,
-      hasTechnologyProfile: true,
-      newsMentionsCount: 1,
       formResponse: {
         status: "RESPONDED",
         urgencyLevel: "HIGH",
@@ -54,7 +50,7 @@ describe("scoreLeadContext", () => {
       },
     });
 
-    expect(score.components.urgency_signals).toBeGreaterThan(70);
-    expect(score.components.outreach_confidence).toBeGreaterThan(80);
+    expect(score.components.urgency_signals).toBeGreaterThan(50);
+    expect(score.components.outreach_confidence).toBeGreaterThan(70);
   });
 });

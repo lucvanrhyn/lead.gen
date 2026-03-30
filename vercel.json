@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "path": "/api/internal/jobs/process",
-      "schedule": "0 4 * * *"
+      "path": "/api/internal/jobs/process?limit=5",
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/internal/google-workspace/renew-watch",

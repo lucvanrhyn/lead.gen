@@ -20,8 +20,9 @@ export async function POST(request: Request) {
     const result = await createDiscoveryBatch(input);
 
     if (input.autoRunPipeline ?? true) {
+      const batchSize = Math.min(input.maxResults ?? 10, 5);
       after(async () => {
-        await dispatchDiscoveryProcessing({ request });
+        await dispatchDiscoveryProcessing({ request, limit: batchSize });
       });
     }
 

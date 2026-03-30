@@ -16,8 +16,6 @@ export async function POST(
         orderBy: { createdAt: "desc" },
         take: 1,
       },
-      technologyProfiles: true,
-      newsMentions: true,
     },
   });
 
@@ -40,8 +38,6 @@ export async function POST(
     painConfidence: latestPain?.confidenceScore,
     painEvidenceCount: Array.isArray(latestPain?.evidence) ? latestPain.evidence.length : 0,
     insufficientEvidence: latestPain?.insufficientEvidence ?? true,
-    hasTechnologyProfile: company.technologyProfiles.length > 0,
-    newsMentionsCount: company.newsMentions.length,
   });
 
   await persistLeadScore(company.id, score);

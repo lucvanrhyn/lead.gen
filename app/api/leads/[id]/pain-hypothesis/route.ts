@@ -26,12 +26,6 @@ export async function POST(
         crawlPages: {
           orderBy: { extractedAt: "desc" },
         },
-        technologyProfiles: {
-          orderBy: { confidence: "desc" },
-        },
-        newsMentions: {
-          orderBy: { publishedAt: "desc" },
-        },
       },
     });
 
@@ -44,8 +38,6 @@ export async function POST(
       website: company.website,
       industry: company.industry,
       crawlPages: company.crawlPages,
-      technologyProfiles: company.technologyProfiles,
-      newsMentions: company.newsMentions,
     });
 
     if (input.persist !== false) {

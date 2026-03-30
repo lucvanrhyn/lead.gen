@@ -67,8 +67,6 @@ export async function runCompanyFullPipeline(companyId: string) {
         crawlPages: {
           orderBy: { extractedAt: "desc" },
         },
-        technologyProfiles: true,
-        newsMentions: true,
         painHypotheses: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -138,8 +136,6 @@ export async function runCompanyFullPipeline(companyId: string) {
         crawlPages: {
           orderBy: { extractedAt: "desc" },
         },
-        technologyProfiles: true,
-        newsMentions: true,
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
           include: {
@@ -199,8 +195,6 @@ export async function runCompanyFullPipeline(companyId: string) {
         crawlPages: {
           orderBy: { extractedAt: "desc" },
         },
-        technologyProfiles: true,
-        newsMentions: true,
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
           include: {
@@ -229,8 +223,6 @@ export async function runCompanyFullPipeline(companyId: string) {
         website: companyWithEvidence.website,
         industry: companyWithEvidence.industry,
         crawlPages: companyWithEvidence.crawlPages,
-        technologyProfiles: companyWithEvidence.technologyProfiles,
-        newsMentions: companyWithEvidence.newsMentions,
       });
       await persistPainHypothesis(companyId, painHypothesis);
       stages.push({
@@ -275,8 +267,6 @@ export async function runCompanyFullPipeline(companyId: string) {
         painConfidence: painHypothesis.confidence_score,
         painEvidenceCount: painHypothesis.evidence.length,
         insufficientEvidence: painHypothesis.insufficient_evidence,
-        hasTechnologyProfile: companyWithEvidence.technologyProfiles.length > 0,
-        newsMentionsCount: companyWithEvidence.newsMentions.length,
       });
       await persistLeadScore(companyId, score);
       stages.push({ stage: "score", status: JobStatus.SUCCEEDED });
@@ -302,12 +292,13 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
-    let leadMagnet: ReturnType<typeof buildLeadMagnet>;
+    let leadMagnet: Awaited<ReturnType<typeof buildLeadMagnet>>;
     let persistedLeadMagnet: Awaited<ReturnType<typeof persistLeadMagnet>>;
 
     try {
-      leadMagnet = buildLeadMagnet({
+      leadMagnet = await buildLeadMagnet({
         companyName: companyWithEvidence.name,
+        industry: companyWithEvidence.industry,
         primaryPain: painHypothesis.primary_pain,
         recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
         recommendedServiceAngle: painHypothesis.recommended_service_angle,
@@ -319,7 +310,7 @@ export async function runCompanyFullPipeline(companyId: string) {
       const message = error instanceof Error ? error.message : "Lead magnet generation failed.";
       await persistPipelineStageOutcome({
         companyId,
-        provider: SourceProvider.SYSTEM,
+        provider: SourceProvider.OPENAI,
         stage: EnrichmentStage.LEAD_MAGNET_GENERATION,
         status: JobStatus.FAILED,
         error: message,

@@ -85,16 +85,6 @@ type PainHypothesisContext = {
     url: string;
     markdown?: string | null;
   }>;
-  technologyProfiles: Array<{
-    technologyName: string;
-    category?: string | null;
-    confidence?: number | null;
-  }>;
-  newsMentions: Array<{
-    title: string;
-    articleUrl: string;
-    summary?: string | null;
-  }>;
 };
 
 function getOpenAiApiKey(apiKey?: string) {
@@ -108,23 +98,10 @@ function getOpenAiApiKey(apiKey?: string) {
 }
 
 function buildEvidenceContext(context: PainHypothesisContext) {
-  const crawlEvidence = context.crawlPages
+  return context.crawlPages
     .filter((page) => page.markdown)
     .map((page) => `Page (${page.pageType}) ${page.url}\n${page.markdown}`)
     .join("\n\n");
-
-  const technologyEvidence = context.technologyProfiles
-    .map(
-      (profile) =>
-        `Technology ${profile.technologyName}${profile.category ? ` (${profile.category})` : ""} confidence ${profile.confidence ?? "--"}`,
-    )
-    .join("\n");
-
-  const newsEvidence = context.newsMentions
-    .map((mention) => `${mention.title} - ${mention.articleUrl}\n${mention.summary ?? ""}`)
-    .join("\n\n");
-
-  return [crawlEvidence, technologyEvidence, newsEvidence].filter(Boolean).join("\n\n");
 }
 
 export function buildInsufficientEvidencePainHypothesis(companyName: string) {
@@ -213,12 +190,31 @@ export async function generatePainHypothesis(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-5.4",
+      model: process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-4o",
       input: [
         {
           role: "system",
-          content:
-            "You generate evidence-backed B2B pain hypotheses. Never invent evidence. Every pain must cite public signals only. If evidence is weak, reduce confidence and say so explicitly.",
+          content: `You are a B2B sales intelligence agent that analyses public evidence to identify the most likely pain point a company is experiencing and assess lead quality.
+
+Your output must be evidence-backed. Never invent evidence. Every claim must cite public signals only.
+
+Lead quality assessment rules:
+- High confidence (0.7–1.0): Website clearly signals the pain, shows operational friction, or describes unmet needs. Multiple evidence sources agree.
+- Medium confidence (0.4–0.69): One clear signal from the website or an indirect indicator. Pain is plausible but not confirmed.
+- Low confidence (0.18–0.39): Thin evidence. Website is minimal or generic. Set insufficient_evidence=true if you cannot identify a specific, actionable pain.
+
+Recommended lead magnet types (choose the one that directly addresses the identified pain):
+- "website conversion teardown" — weak/confusing online presence
+- "booking-flow audit" — friction in booking or scheduling
+- "automation opportunity snapshot" — manual, repetitive workflows visible on the site
+- "cost-per-lead analysis" — paid advertising spend without clear tracking
+- "compliance gap review" — regulated industry with potential liability exposure
+- "pricing strategy teardown" — pricing that undersells the service quality
+- "referral system audit" — service business relying heavily on referrals
+- "local SEO audit" — poor local search visibility
+- "research follow-up" — insufficient evidence to identify a specific pain
+
+The recommended_service_angle must be a concrete, 1-sentence value proposition that connects the pain to a service offering.`,
         },
         {
           role: "user",

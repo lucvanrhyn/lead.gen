@@ -26,8 +26,9 @@ export async function POST(
   }
 
   const latestPain = company.painHypotheses[0];
-  const leadMagnet = buildLeadMagnet({
+  const leadMagnet = await buildLeadMagnet({
     companyName: company.name,
+    industry: company.industry,
     primaryPain: latestPain.primaryPain,
     recommendedLeadMagnetType: latestPain.recommendedLeadMagnetType,
     recommendedServiceAngle: latestPain.recommendedServiceAngle,

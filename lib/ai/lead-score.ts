@@ -30,8 +30,6 @@ type LeadScoreContext = {
   painConfidence?: number | null;
   painEvidenceCount: number;
   insufficientEvidence: boolean;
-  hasTechnologyProfile: boolean;
-  newsMentionsCount: number;
   formResponse?: {
     status?: "NOT_SHARED" | "LINK_ATTACHED" | "RESPONDED" | "REVIEWED";
     urgencyLevel?: "LOW" | "MEDIUM" | "HIGH";
@@ -98,16 +96,14 @@ export function scoreLeadContext(context: LeadScoreContext) {
 
   const urgencySignals = clampScore(
     28 +
-      Math.min(28, context.newsMentionsCount * 18) +
-      (context.painEvidenceCount > 1 ? 18 : 8) +
+      (context.painEvidenceCount > 1 ? 28 : 8) +
       formUrgencyBoost,
   );
 
   const serviceability = clampScore(
     42 +
-      (context.hasWebsite ? 15 : 0) +
-      (context.hasTechnologyProfile ? 18 : 5) +
-      (context.hasIndustry ? 15 : 0) +
+      (context.hasWebsite ? 20 : 0) +
+      (context.hasIndustry ? 18 : 0) +
       workflowDetailBoost,
   );
 

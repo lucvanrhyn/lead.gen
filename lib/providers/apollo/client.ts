@@ -5,15 +5,6 @@ import {
 } from "@prisma/client";
 
 const APOLLO_BASE_URL = "https://api.apollo.io/api/v1";
-const DEFAULT_TITLE_HINTS = [
-  "owner",
-  "founder",
-  "chief executive officer",
-  "managing director",
-  "practice manager",
-  "operations manager",
-  "marketing manager",
-];
 
 type FetchLike = typeof fetch;
 
@@ -239,9 +230,9 @@ async function searchApolloPeople(
       },
       body: JSON.stringify({
         q_organization_domains_list: [domain],
-        person_titles: DEFAULT_TITLE_HINTS,
+        person_seniorities: ["owner", "founder", "c_suite", "vp", "director", "manager", "partner"],
         page: 1,
-        per_page: 5,
+        per_page: 10,
       }),
     },
     fetchFn,
