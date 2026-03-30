@@ -240,6 +240,53 @@ export async function extractLeadWebsitePages(
   };
 }
 
+const EMAIL_PATTERN = /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g;
+const EXCLUDED_EMAIL_DOMAINS = ["example.com", "sentry.io", "wixpress.com", "squarespace.com"];
+
+export function extractEmailsFromPages(pages: NormalizedFirecrawlPage[]) {
+  const found = new Set<string>();
+
+  for (const page of pages) {
+    if (!page.markdown) continue;
+
+    for (const match of page.markdown.matchAll(EMAIL_PATTERN)) {
+      const email = match[0].toLowerCase();
+      const domain = email.split("@")[1];
+
+      if (EXCLUDED_EMAIL_DOMAINS.some((excluded) => domain.includes(excluded))) continue;
+
+      found.add(email);
+    }
+  }
+
+  return Array.from(found);
+}
+
+export async function persistContactsFromCrawl(companyId: string, emails: string[]) {
+  if (emails.length === 0) return 0;
+
+  const { db } = await import("@/lib/db");
+  let created = 0;
+
+  for (const email of emails.slice(0, 5)) {
+    const existing = await db.contact.findFirst({ where: { companyId, email } });
+
+    if (!existing) {
+      await db.contact.create({
+        data: {
+          companyId,
+          fullName: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          email,
+          decisionMakerConfidence: 0.45,
+        },
+      });
+      created += 1;
+    }
+  }
+
+  return created;
+}
+
 export async function persistFirecrawlPages(
   companyId: string,
   pages: NormalizedFirecrawlPage[],

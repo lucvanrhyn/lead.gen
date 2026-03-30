@@ -85,12 +85,22 @@ export async function enqueueDiscoveryJobs(
 
 export async function claimQueuedDiscoveryJobs(limit = 5) {
   const now = new Date();
+  // Jobs stuck in RUNNING for more than 5 minutes are considered timed out and re-claimable.
+  const staleRunningCutoff = new Date(now.getTime() - 5 * 60 * 1000);
   const candidates = await db.enrichmentJob.findMany({
     where: {
       requestedBy: DISCOVERY_QUEUE_REQUESTED_BY,
       stage: EnrichmentStage.GOOGLE_PLACES_DISCOVERY,
-      status: { in: [JobStatus.PENDING, JobStatus.FAILED] },
-      OR: [{ runAt: null }, { runAt: { lte: now } }],
+      OR: [
+        {
+          status: { in: [JobStatus.PENDING, JobStatus.FAILED] },
+          AND: [{ OR: [{ runAt: null }, { runAt: { lte: now } }] }],
+        },
+        {
+          status: JobStatus.RUNNING,
+          updatedAt: { lte: staleRunningCutoff },
+        },
+      ],
     },
     orderBy: [{ runAt: "asc" }, { createdAt: "asc" }],
     take: limit,

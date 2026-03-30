@@ -21,7 +21,11 @@ import { persistLeadScore, scoreLeadContext } from "@/lib/ai/lead-score";
 import { db } from "@/lib/db";
 import { createLiveDiagnosticFormLink } from "@/lib/domain/diagnostic-form-links";
 import { enrichApolloCompanyAndContacts } from "@/lib/providers/apollo/client";
-import { extractLeadWebsitePages } from "@/lib/providers/firecrawl/client";
+import {
+  extractLeadWebsitePages,
+  extractEmailsFromPages,
+  persistContactsFromCrawl,
+} from "@/lib/providers/firecrawl/client";
 
 type StageResult = {
   stage: string;
@@ -158,13 +162,17 @@ export async function runCompanyFullPipeline(companyId: string) {
 
     try {
       if (refreshedCompany.website) {
-        await extractLeadWebsitePages(
+        const crawlResult = await extractLeadWebsitePages(
           {
             website: refreshedCompany.website,
             persistCompanyId: refreshedCompany.id,
           },
           { persist: true },
         );
+        // Extract emails from crawled pages as a fallback when Apollo People Search
+        // is unavailable — ensures contacts exist even without a full Apollo plan.
+        const crawlEmails = extractEmailsFromPages(crawlResult.pages);
+        await persistContactsFromCrawl(refreshedCompany.id, crawlEmails);
         stages.push({ stage: "crawl", status: JobStatus.SUCCEEDED });
       } else {
         stages.push({ stage: "crawl", status: JobStatus.PARTIAL, error: "No website available." });

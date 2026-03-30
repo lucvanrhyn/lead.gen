@@ -183,18 +183,14 @@ export async function generatePainHypothesis(
 
   const apiKey = getOpenAiApiKey(options?.apiKey);
   const fetchFn = options?.fetchFn ?? fetch;
-  const response = await fetchFn("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-4o",
-      input: [
-        {
-          role: "system",
-          content: `You are a B2B sales intelligence agent that analyses public evidence to identify the most likely pain point a company is experiencing and assess lead quality.
+  const model = process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-4o";
+
+  const body = JSON.stringify({
+    model,
+    input: [
+      {
+        role: "system",
+        content: `You are a B2B sales intelligence agent that analyses public evidence to identify the most likely pain point a company is experiencing and assess lead quality.
 
 Your output must be evidence-backed. Never invent evidence. Every claim must cite public signals only.
 
@@ -215,33 +211,60 @@ Recommended lead magnet types (choose the one that directly addresses the identi
 - "research follow-up" — insufficient evidence to identify a specific pain
 
 The recommended_service_angle must be a concrete, 1-sentence value proposition that connects the pain to a service offering.`,
-        },
-        {
-          role: "user",
-          content: [
-            `Company: ${context.companyName}`,
-            context.website ? `Website: ${context.website}` : null,
-            context.industry ? `Industry: ${context.industry}` : null,
-            "Public evidence:",
-            evidenceContext,
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "pain_hypothesis",
-          strict: true,
-          schema: painHypothesisJsonSchema,
-        },
       },
-    }),
+      {
+        role: "user",
+        content: [
+          `Company: ${context.companyName}`,
+          context.website ? `Website: ${context.website}` : null,
+          context.industry ? `Industry: ${context.industry}` : null,
+          "Public evidence:",
+          evidenceContext,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "pain_hypothesis",
+        strict: true,
+        schema: painHypothesisJsonSchema,
+      },
+    },
   });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI pain hypothesis request failed with status ${response.status}.`);
+  // Retry up to 3 times with backoff on rate limit or server errors.
+  let response: Response | undefined;
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    response = await fetchFn("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    });
+
+    if (response.ok) break;
+
+    if (response.status === 429 || response.status >= 500) {
+      lastError = new Error(`OpenAI pain hypothesis request failed with status ${response.status}.`);
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  if (!response?.ok) {
+    throw lastError ?? new Error(`OpenAI pain hypothesis request failed with status ${response?.status}.`);
   }
 
   const payload = await response.json();
