@@ -110,6 +110,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
       <PipelineActions
         hasWebsite={lead.company.hasWebsite}
         leadId={lead.company.id}
+        pipeline={lead.pipeline}
       />
 
       <section className="dashboard-panel rounded-[3rem] p-7">

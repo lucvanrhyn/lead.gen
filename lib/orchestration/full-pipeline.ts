@@ -1,4 +1,11 @@
-import { ApprovalStatus, EnrichmentStage, ExternalSyncStatus, JobStatus, SourceProvider } from "@prisma/client";
+import {
+  ApprovalStatus,
+  EnrichmentStage,
+  ExternalSyncStatus,
+  JobStatus,
+  SourceProvider,
+  type Prisma,
+} from "@prisma/client";
 
 import { buildDiagnosticFormBlueprint, persistDiagnosticFormBlueprint } from "@/lib/ai/diagnostic-form";
 import { buildLeadMagnet, persistLeadMagnet } from "@/lib/ai/lead-magnet";
@@ -22,8 +29,35 @@ type StageResult = {
   error?: string;
 };
 
+async function persistPipelineStageOutcome(input: {
+  companyId: string;
+  provider: SourceProvider;
+  stage: EnrichmentStage;
+  status: JobStatus;
+  error?: string;
+  resultSummary?: Prisma.InputJsonObject;
+}) {
+  try {
+    await db.enrichmentJob.create({
+      data: {
+        companyId: input.companyId,
+        provider: input.provider,
+        stage: input.stage,
+        status: input.status,
+        attempts: 1,
+        requestedBy: "orchestration.full-pipeline",
+        lastError: input.error ?? null,
+        resultSummary: input.resultSummary,
+      },
+    });
+  } catch {
+    // Preserve the pipeline response even if audit persistence fails.
+  }
+}
+
 export async function runCompanyFullPipeline(companyId: string) {
   const stages: StageResult[] = [];
+  let apolloWarnings: string[] = [];
 
   try {
     const company = await db.company.findUnique({
@@ -65,7 +99,7 @@ export async function runCompanyFullPipeline(companyId: string) {
         (company.website ? new URL(company.website).hostname.replace(/^www\./, "") : null);
 
       if (domain) {
-        await enrichApolloCompanyAndContacts(
+        const enrichment = await enrichApolloCompanyAndContacts(
           {
             domain,
             companyName: company.name,
@@ -73,15 +107,25 @@ export async function runCompanyFullPipeline(companyId: string) {
           },
           { persist: true },
         );
+        apolloWarnings = enrichment.warnings;
         stages.push({ stage: "enrich", status: JobStatus.SUCCEEDED });
       } else {
         stages.push({ stage: "enrich", status: JobStatus.PARTIAL, error: "No website or domain." });
       }
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Apollo enrichment failed.";
       stages.push({
         stage: "enrich",
         status: JobStatus.FAILED,
-        error: error instanceof Error ? error.message : "Apollo enrichment failed.",
+        error: message,
+      });
+      await persistPipelineStageOutcome({
+        companyId,
+        provider: SourceProvider.APOLLO,
+        stage: EnrichmentStage.APOLLO_COMPANY_ENRICHMENT,
+        status: JobStatus.FAILED,
+        error: message,
       });
     }
 
@@ -130,10 +174,19 @@ export async function runCompanyFullPipeline(companyId: string) {
         stages.push({ stage: "crawl", status: JobStatus.PARTIAL, error: "No website available." });
       }
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Firecrawl extraction failed.";
       stages.push({
         stage: "crawl",
         status: JobStatus.FAILED,
-        error: error instanceof Error ? error.message : "Firecrawl extraction failed.",
+        error: message,
+      });
+      await persistPipelineStageOutcome({
+        companyId,
+        provider: SourceProvider.FIRECRAWL,
+        stage: EnrichmentStage.FIRECRAWL_EXTRACTION,
+        status: JobStatus.FAILED,
+        error: message,
       });
     }
 
@@ -168,67 +221,158 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
-    const painHypothesis = await generatePainHypothesis({
-      companyName: companyWithEvidence.name,
-      website: companyWithEvidence.website,
-      industry: companyWithEvidence.industry,
-      crawlPages: companyWithEvidence.crawlPages,
-      technologyProfiles: companyWithEvidence.technologyProfiles,
-      newsMentions: companyWithEvidence.newsMentions,
-    });
-    await persistPainHypothesis(companyId, painHypothesis);
-    stages.push({
-      stage: "pain-hypothesis",
-      status: painHypothesis.insufficient_evidence ? JobStatus.PARTIAL : JobStatus.SUCCEEDED,
-    });
+    let painHypothesis: Awaited<ReturnType<typeof generatePainHypothesis>>;
 
-    const score = scoreLeadContext({
-      hasIndustry: Boolean(companyWithEvidence.industry),
-      employeeCount: companyWithEvidence.employeeCount,
-      hasWebsite: Boolean(companyWithEvidence.website),
-      hasPhone: Boolean(companyWithEvidence.phone),
-      hasLocation: Boolean(companyWithEvidence.locationSummary),
-      contacts: companyWithEvidence.contacts.map((contact) => ({
-        hasEmail: Boolean(contact.email),
-        hasPhone: Boolean(contact.phone),
-        decisionMakerConfidence: contact.decisionMakerConfidence,
-      })),
-      painConfidence: painHypothesis.confidence_score,
-      painEvidenceCount: painHypothesis.evidence.length,
-      insufficientEvidence: painHypothesis.insufficient_evidence,
-      hasTechnologyProfile: companyWithEvidence.technologyProfiles.length > 0,
-      newsMentionsCount: companyWithEvidence.newsMentions.length,
-    });
-    await persistLeadScore(companyId, score);
-    stages.push({ stage: "score", status: JobStatus.SUCCEEDED });
+    try {
+      painHypothesis = await generatePainHypothesis({
+        companyName: companyWithEvidence.name,
+        website: companyWithEvidence.website,
+        industry: companyWithEvidence.industry,
+        crawlPages: companyWithEvidence.crawlPages,
+        technologyProfiles: companyWithEvidence.technologyProfiles,
+        newsMentions: companyWithEvidence.newsMentions,
+      });
+      await persistPainHypothesis(companyId, painHypothesis);
+      stages.push({
+        stage: "pain-hypothesis",
+        status: painHypothesis.insufficient_evidence ? JobStatus.PARTIAL : JobStatus.SUCCEEDED,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Pain hypothesis generation failed.";
+      await persistPipelineStageOutcome({
+        companyId,
+        provider: SourceProvider.OPENAI,
+        stage: EnrichmentStage.PAIN_HYPOTHESIS_GENERATION,
+        status: JobStatus.FAILED,
+        error: message,
+      });
+      stages.push({
+        stage: "pain-hypothesis",
+        status: JobStatus.FAILED,
+        error: message,
+      });
 
-    const leadMagnet = buildLeadMagnet({
-      companyName: companyWithEvidence.name,
-      primaryPain: painHypothesis.primary_pain,
-      recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
-      recommendedServiceAngle: painHypothesis.recommended_service_angle,
-      insufficientEvidence: painHypothesis.insufficient_evidence,
-    });
-    const persistedLeadMagnet = await persistLeadMagnet(companyId, leadMagnet);
-    stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED });
+      return {
+        status: JobStatus.FAILED,
+        error: message,
+        stages,
+      };
+    }
 
+    try {
+      const score = scoreLeadContext({
+        hasIndustry: Boolean(companyWithEvidence.industry),
+        employeeCount: companyWithEvidence.employeeCount,
+        hasWebsite: Boolean(companyWithEvidence.website),
+        hasPhone: Boolean(companyWithEvidence.phone),
+        hasLocation: Boolean(companyWithEvidence.locationSummary),
+        contacts: companyWithEvidence.contacts.map((contact) => ({
+          hasEmail: Boolean(contact.email),
+          hasPhone: Boolean(contact.phone),
+          decisionMakerConfidence: contact.decisionMakerConfidence,
+        })),
+        painConfidence: painHypothesis.confidence_score,
+        painEvidenceCount: painHypothesis.evidence.length,
+        insufficientEvidence: painHypothesis.insufficient_evidence,
+        hasTechnologyProfile: companyWithEvidence.technologyProfiles.length > 0,
+        newsMentionsCount: companyWithEvidence.newsMentions.length,
+      });
+      await persistLeadScore(companyId, score);
+      stages.push({ stage: "score", status: JobStatus.SUCCEEDED });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Lead scoring failed.";
+      await persistPipelineStageOutcome({
+        companyId,
+        provider: SourceProvider.SYSTEM,
+        stage: EnrichmentStage.LEAD_SCORING,
+        status: JobStatus.FAILED,
+        error: message,
+      });
+      stages.push({
+        stage: "score",
+        status: JobStatus.FAILED,
+        error: message,
+      });
+
+      return {
+        status: JobStatus.FAILED,
+        error: message,
+        stages,
+      };
+    }
+
+    let leadMagnet: ReturnType<typeof buildLeadMagnet>;
+    let persistedLeadMagnet: Awaited<ReturnType<typeof persistLeadMagnet>>;
+
+    try {
+      leadMagnet = buildLeadMagnet({
+        companyName: companyWithEvidence.name,
+        primaryPain: painHypothesis.primary_pain,
+        recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
+        recommendedServiceAngle: painHypothesis.recommended_service_angle,
+        insufficientEvidence: painHypothesis.insufficient_evidence,
+      });
+      persistedLeadMagnet = await persistLeadMagnet(companyId, leadMagnet);
+      stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Lead magnet generation failed.";
+      await persistPipelineStageOutcome({
+        companyId,
+        provider: SourceProvider.SYSTEM,
+        stage: EnrichmentStage.LEAD_MAGNET_GENERATION,
+        status: JobStatus.FAILED,
+        error: message,
+      });
+      stages.push({
+        stage: "lead-magnet",
+        status: JobStatus.FAILED,
+        error: message,
+      });
+
+      return {
+        status: JobStatus.FAILED,
+        error: message,
+        stages,
+      };
+    }
+
+    let diagnosticForm: ReturnType<typeof buildDiagnosticFormBlueprint>;
+    let persistedDiagnosticForm: Awaited<ReturnType<typeof persistDiagnosticFormBlueprint>>;
     const persistedPain = await db.painHypothesis.findFirst({
       where: { companyId },
       orderBy: { createdAt: "desc" },
       select: { id: true },
     });
 
-    const diagnosticForm = buildDiagnosticFormBlueprint({
-      companyName: companyWithEvidence.name,
-      industry: companyWithEvidence.industry,
-      primaryPain: painHypothesis.primary_pain,
-      serviceAngle: painHypothesis.recommended_service_angle,
-    });
-    const persistedDiagnosticForm = await persistDiagnosticFormBlueprint({
-      companyId,
-      painHypothesisId: persistedPain?.id,
-      blueprint: diagnosticForm,
-    });
+    try {
+      diagnosticForm = buildDiagnosticFormBlueprint({
+        companyName: companyWithEvidence.name,
+        industry: companyWithEvidence.industry,
+        primaryPain: painHypothesis.primary_pain,
+        serviceAngle: painHypothesis.recommended_service_angle,
+      });
+      persistedDiagnosticForm = await persistDiagnosticFormBlueprint({
+        companyId,
+        painHypothesisId: persistedPain?.id,
+        blueprint: diagnosticForm,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Diagnostic form generation failed.";
+      stages.push({
+        stage: "diagnostic-form",
+        status: JobStatus.FAILED,
+        error: message,
+      });
+
+      return {
+        status: JobStatus.FAILED,
+        error: message,
+        stages,
+      };
+    }
+
     let diagnosticFormUrl: string | null = null;
     let diagnosticFormStatus: JobStatus = JobStatus.SUCCEEDED;
     let diagnosticFormError: string | undefined;
@@ -254,6 +398,9 @@ export async function runCompanyFullPipeline(companyId: string) {
     const contacts = companyWithEvidence.contacts.filter((contact) => Boolean(contact.email));
 
     if (contacts.length === 0) {
+      const noContactsReason =
+        apolloWarnings[0] ?? "No valid contacts with email were available for draft generation.";
+
       await db.enrichmentJob.create({
         data: {
           companyId,
@@ -273,7 +420,7 @@ export async function runCompanyFullPipeline(companyId: string) {
             suppressedContacts: [],
             generatedDraftCount: 0,
             suppressedContactCount: 0,
-            note: "No valid contacts with email were available for draft generation.",
+            note: noContactsReason,
           },
         },
       });
@@ -281,7 +428,7 @@ export async function runCompanyFullPipeline(companyId: string) {
       stages.push({
         stage: "outreach",
         status: JobStatus.PARTIAL,
-        error: "No valid contacts with email were available for draft generation.",
+        error: noContactsReason,
       });
 
       return {

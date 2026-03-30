@@ -5,6 +5,7 @@ import { LeadDetailView } from "@/components/leads/lead-detail-view";
 import { LeadTable } from "@/components/leads/lead-table";
 import { ApprovalQueue } from "@/components/leads/approval-queue";
 import { GoogleWorkspaceStatus } from "@/components/leads/google-workspace-status";
+import { type LeadDetailViewModel } from "@/lib/leads/view-models";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -30,7 +31,7 @@ const leadRows = [
   },
 ];
 
-const leadDetail = {
+const leadDetail: LeadDetailViewModel = {
   company: {
     id: "lead-1",
     name: "Atlas Dental Group",
@@ -44,6 +45,59 @@ const leadDetail = {
     manualReviewRequired: false,
     status: "READY",
     hasWebsite: true,
+  },
+  pipeline: {
+    completedCount: 5,
+    totalCount: 7,
+    stages: [
+      {
+        id: "enrich",
+        label: "Apollo enrich",
+        status: "SUCCEEDED",
+        detail: "1 contact with email available.",
+        updatedAtLabel: "2026-03-29 15:20",
+      },
+      {
+        id: "crawl",
+        label: "Extract site",
+        status: "PARTIAL",
+        detail: "1 page extracted from the website.",
+        updatedAtLabel: "2026-03-29 15:21",
+      },
+      {
+        id: "pain",
+        label: "Generate pains",
+        status: "SUCCEEDED",
+        detail: "Pain hypothesis generated from the current evidence.",
+        updatedAtLabel: "2026-03-29 15:22",
+      },
+      {
+        id: "score",
+        label: "Score lead",
+        status: "SUCCEEDED",
+        detail: "Lead score saved.",
+        updatedAtLabel: "2026-03-29 15:23",
+      },
+      {
+        id: "magnet",
+        label: "Create lead magnet",
+        status: "SUCCEEDED",
+        detail: "Lead magnet created.",
+        updatedAtLabel: "2026-03-29 15:24",
+      },
+      {
+        id: "form",
+        label: "Generate form",
+        status: "PARTIAL",
+        detail: "Diagnostic blueprint saved. Connect Google Workspace to create a live Google Form.",
+      },
+      {
+        id: "outreach",
+        label: "Draft outreach",
+        status: "BLOCKED",
+        detail: "No valid contacts with email were available for outreach drafts.",
+      },
+    ],
   },
   contacts: [
     {
@@ -247,6 +301,15 @@ describe("LeadDetailView", () => {
     expect(screen.getByText(/click event/i)).toBeInTheDocument();
     expect(screen.getByText(/follow-up created/i)).toBeInTheDocument();
     expect(screen.getByText(/atlas dental group follow-up/i)).toBeInTheDocument();
+  });
+
+  it("renders persisted pipeline stage state alongside the actions", () => {
+    render(<LeadDetailView lead={leadDetail} />);
+
+    expect(screen.getAllByText(/apollo enrich/i)).toHaveLength(2);
+    expect(screen.getByText(/1 contact with email available/i)).toBeInTheDocument();
+    expect(screen.getByText(/diagnostic blueprint saved/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked/i)).toBeInTheDocument();
   });
 });
 
