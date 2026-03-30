@@ -242,6 +242,33 @@ export async function extractLeadWebsitePages(
 
 const EMAIL_PATTERN = /\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/g;
 const EXCLUDED_EMAIL_DOMAINS = ["example.com", "sentry.io", "wixpress.com", "squarespace.com"];
+const FILE_EXTENSION_TLDS = new Set([
+  "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "pdf", "doc",
+  "docx", "xls", "xlsx", "zip", "tar", "gz", "mp4", "mp3", "mov", "avi",
+]);
+
+function isValidExtractedEmail(email: string) {
+  const atIndex = email.indexOf("@");
+  if (atIndex < 1) return false;
+
+  const domain = email.slice(atIndex + 1);
+  const dotIndex = domain.lastIndexOf(".");
+  if (dotIndex < 1) return false;
+
+  const tld = domain.slice(dotIndex + 1).toLowerCase();
+
+  // Reject file extension TLDs (e.g., logo@2x-retina-300x126.png)
+  if (FILE_EXTENSION_TLDS.has(tld)) return false;
+
+  // TLD must be 2–6 alphabetic chars only
+  if (!/^[a-z]{2,6}$/.test(tld)) return false;
+
+  // Domain must have at least one non-numeric component
+  const domainWithoutTld = domain.slice(0, dotIndex);
+  if (/^\d+$/.test(domainWithoutTld)) return false;
+
+  return true;
+}
 
 export function extractEmailsFromPages(pages: NormalizedFirecrawlPage[]) {
   const found = new Set<string>();
@@ -253,6 +280,7 @@ export function extractEmailsFromPages(pages: NormalizedFirecrawlPage[]) {
       const email = match[0].toLowerCase();
       const domain = email.split("@")[1];
 
+      if (!isValidExtractedEmail(email)) continue;
       if (EXCLUDED_EMAIL_DOMAINS.some((excluded) => domain.includes(excluded))) continue;
 
       found.add(email);
