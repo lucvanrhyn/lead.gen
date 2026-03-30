@@ -3,6 +3,31 @@ import { NextResponse } from "next/server";
 import { buildOutreachDraft, persistOutreachDraft } from "@/lib/ai/outreach";
 import { db } from "@/lib/db";
 
+function getNoContactsError(job?: {
+  lastError?: string | null;
+  resultSummary?: unknown;
+}) {
+  if (job?.lastError) {
+    return job.lastError;
+  }
+
+  if (
+    job?.resultSummary &&
+    typeof job.resultSummary === "object" &&
+    !Array.isArray(job.resultSummary) &&
+    "warnings" in job.resultSummary &&
+    Array.isArray(job.resultSummary.warnings)
+  ) {
+    const warning = job.resultSummary.warnings.find((value): value is string => typeof value === "string");
+
+    if (warning) {
+      return warning;
+    }
+  }
+
+  return "No valid contacts with email were available for outreach drafts.";
+}
+
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -29,6 +54,13 @@ export async function POST(
           formLink: true,
         },
       },
+      enrichmentJobs: {
+        where: {
+          stage: "APOLLO_PEOPLE_ENRICHMENT",
+        },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
   });
 
@@ -46,7 +78,7 @@ export async function POST(
 
   if (contacts.length === 0) {
     return NextResponse.json(
-      { error: "No valid contacts with email were available for outreach drafts." },
+      { error: getNoContactsError(company.enrichmentJobs[0]) },
       { status: 422 },
     );
   }

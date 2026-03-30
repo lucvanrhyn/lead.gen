@@ -315,7 +315,7 @@ export async function enrichApolloCompanyAndContacts(
   }
 
   if (options?.persist !== false && input.persistCompanyId) {
-    await persistApolloEnrichment(input.persistCompanyId, company, contacts);
+    await persistApolloEnrichment(input.persistCompanyId, company, contacts, warnings);
   }
 
   return {
@@ -329,6 +329,7 @@ export async function persistApolloEnrichment(
   companyId: string,
   company: NormalizedApolloCompany,
   contacts: NormalizedApolloContact[],
+  warnings: string[] = [],
 ) {
   const { db } = await import("@/lib/db");
 
@@ -443,8 +444,10 @@ export async function persistApolloEnrichment(
       status: contacts.length > 0 ? JobStatus.SUCCEEDED : JobStatus.PARTIAL,
       attempts: 1,
       requestedBy: "api.leads.enrich",
+      lastError: warnings[0] ?? null,
       resultSummary: {
         contact_count: contacts.length,
+        ...(warnings.length > 0 ? { warnings } : {}),
       },
     },
   });

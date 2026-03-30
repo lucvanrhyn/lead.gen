@@ -1,6 +1,13 @@
 describe("discovery processing dispatch", () => {
   const originalEnv = process.env;
   const fetchMock = vi.fn();
+  const { processQueuedDiscoveryJobs } = vi.hoisted(() => ({
+    processQueuedDiscoveryJobs: vi.fn(),
+  }));
+
+  vi.mock("@/lib/jobs/worker", () => ({
+    processQueuedDiscoveryJobs,
+  }));
 
   beforeEach(() => {
     vi.resetModules();
@@ -44,10 +51,14 @@ describe("discovery processing dispatch", () => {
     );
   });
 
-  it("skips dispatching when the cron secret is unavailable", async () => {
+  it("falls back to direct processing when the cron secret is unavailable", async () => {
     process.env = {
       ...originalEnv,
     };
+    processQueuedDiscoveryJobs.mockResolvedValueOnce({
+      claimedCount: 1,
+      processed: [],
+    });
 
     const { dispatchDiscoveryProcessing } = await import("@/lib/jobs/dispatch");
     const response = await dispatchDiscoveryProcessing({
@@ -55,9 +66,11 @@ describe("discovery processing dispatch", () => {
     });
 
     expect(response).toEqual({
-      dispatched: false,
-      reason: "missing-cron-secret",
+      dispatched: true,
+      mode: "direct",
+      claimedCount: 1,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(processQueuedDiscoveryJobs).toHaveBeenCalledWith({ limit: 1 });
   });
 });

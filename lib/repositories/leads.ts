@@ -1,4 +1,4 @@
-import { ApprovalStatus, ExternalSyncStatus } from "@prisma/client";
+import { ApprovalStatus, EnrichmentStage, ExternalSyncStatus, JobStatus } from "@prisma/client";
 import { buildCampaignAnalytics } from "@/lib/ai/outreach";
 import { db } from "@/lib/db";
 import {
@@ -14,6 +14,9 @@ import {
   type LeadTablePagination,
   type GoogleWorkspaceStatusViewModel,
   type LeadDetailViewModel,
+  type LeadPipelineStageStatus,
+  type LeadPipelineStageViewModel,
+  type LeadPipelineViewModel,
   type LeadTableRow,
 } from "@/lib/leads/view-models";
 
@@ -27,6 +30,269 @@ function formatScore(value: number | null | undefined) {
 
 function formatDateTime(value: Date) {
   return value.toISOString().slice(0, 16).replace("T", " ");
+}
+
+function deriveDisplayedCompanyStatus(input: {
+  status: string;
+  manualReviewRequired: boolean;
+  hasRecentPipelineOutput: boolean;
+  hasRunningJob?: boolean;
+}) {
+  if (input.manualReviewRequired) {
+    return "NEEDS_REVIEW";
+  }
+
+  if (input.hasRunningJob) {
+    return "ENRICHING";
+  }
+
+  if (input.hasRecentPipelineOutput) {
+    return "READY";
+  }
+
+  return input.status;
+}
+
+function mapPipelineJobStatus(status: JobStatus): LeadPipelineStageStatus {
+  switch (status) {
+    case JobStatus.PENDING:
+    case JobStatus.RUNNING:
+      return "RUNNING";
+    case JobStatus.SUCCEEDED:
+      return "SUCCEEDED";
+    case JobStatus.PARTIAL:
+      return "PARTIAL";
+    case JobStatus.FAILED:
+      return "FAILED";
+    default:
+      return "NOT_STARTED";
+  }
+}
+
+function readStageSummaryNote(job?: {
+  lastError?: string | null;
+  resultSummary?: unknown;
+}) {
+  if (job?.lastError) {
+    return job.lastError;
+  }
+
+  const summary = toRecord(job?.resultSummary);
+
+  if (!summary) {
+    return undefined;
+  }
+
+  if (typeof summary.note === "string") {
+    return summary.note;
+  }
+
+  if (
+    typeof summary.generatedDraftCount === "number" &&
+    typeof summary.suppressedContactCount === "number"
+  ) {
+    return `${summary.generatedDraftCount} draft${summary.generatedDraftCount === 1 ? "" : "s"} generated, ${summary.suppressedContactCount} contact${summary.suppressedContactCount === 1 ? "" : "s"} suppressed.`;
+  }
+
+  if (typeof summary.contact_count === "number") {
+    return `${summary.contact_count} contact${summary.contact_count === 1 ? "" : "s"} returned.`;
+  }
+
+  if (typeof summary.page_count === "number") {
+    return `${summary.page_count} page${summary.page_count === 1 ? "" : "s"} extracted.`;
+  }
+
+  return undefined;
+}
+
+function buildLeadPipeline(company: {
+  website: string | null;
+  normalizedDomain?: string | null;
+  contacts: Array<{ email: string | null }>;
+  crawlPages: Array<{ id: string }>;
+  painHypotheses: Array<{ insufficientEvidence?: boolean | null }>;
+  leadScores: Array<{ id: string }>;
+  leadMagnets: Array<{ id: string }>;
+  diagnosticForms: Array<{ id: string; formLink?: { url: string | null } | null }>;
+  outreachDrafts: Array<{ id: string }>;
+  enrichmentJobs: Array<{
+    stage: EnrichmentStage;
+    status: JobStatus;
+    lastError: string | null;
+    resultSummary: unknown;
+    updatedAt: Date;
+  }>;
+}): LeadPipelineViewModel {
+  const latestJobByStage = new Map<EnrichmentStage, (typeof company.enrichmentJobs)[number]>();
+
+  for (const job of company.enrichmentJobs) {
+    if (!latestJobByStage.has(job.stage)) {
+      latestJobByStage.set(job.stage, job);
+    }
+  }
+
+  const contactEmailCount = company.contacts.filter((contact) => Boolean(contact.email)).length;
+  const hasPain = company.painHypotheses.length > 0;
+  const latestPain = company.painHypotheses[0];
+  const hasLeadMagnet = company.leadMagnets.length > 0;
+  const latestDiagnosticForm = company.diagnosticForms[0];
+  const enrichJob =
+    latestJobByStage.get(EnrichmentStage.APOLLO_PEOPLE_ENRICHMENT) ??
+    latestJobByStage.get(EnrichmentStage.APOLLO_COMPANY_ENRICHMENT);
+  const crawlJob = latestJobByStage.get(EnrichmentStage.FIRECRAWL_EXTRACTION);
+  const painJob = latestJobByStage.get(EnrichmentStage.PAIN_HYPOTHESIS_GENERATION);
+  const scoreJob = latestJobByStage.get(EnrichmentStage.LEAD_SCORING);
+  const leadMagnetJob = latestJobByStage.get(EnrichmentStage.LEAD_MAGNET_GENERATION);
+  const outreachJob = latestJobByStage.get(EnrichmentStage.OUTREACH_GENERATION);
+
+  const stages: LeadPipelineStageViewModel[] = [
+    {
+      id: "enrich",
+      label: "Apollo enrich",
+      status: enrichJob
+        ? mapPipelineJobStatus(enrichJob.status)
+        : company.normalizedDomain || company.contacts.length > 0
+          ? "SUCCEEDED"
+          : company.website
+            ? "NOT_STARTED"
+            : "BLOCKED",
+      detail:
+        readStageSummaryNote(enrichJob) ??
+        (contactEmailCount > 0
+          ? `${contactEmailCount} contact${contactEmailCount === 1 ? "" : "s"} with email available.`
+          : company.contacts.length > 0
+            ? `${company.contacts.length} contact${company.contacts.length === 1 ? "" : "s"} found, but none have email addresses yet.`
+            : company.website || company.normalizedDomain
+              ? "Ready to enrich this company from Apollo."
+              : "Add a public website or domain before Apollo enrichment can run."),
+      updatedAtLabel: enrichJob ? formatDateTime(enrichJob.updatedAt) : undefined,
+    },
+    {
+      id: "crawl",
+      label: "Extract site",
+      status: crawlJob
+        ? mapPipelineJobStatus(crawlJob.status)
+        : company.crawlPages.length > 0
+          ? "SUCCEEDED"
+          : company.website
+            ? "NOT_STARTED"
+            : "BLOCKED",
+      detail:
+        readStageSummaryNote(crawlJob) ??
+        (company.crawlPages.length > 0
+          ? `${company.crawlPages.length} page${company.crawlPages.length === 1 ? "" : "s"} extracted from the website.`
+          : company.website
+            ? "Website extraction has not run yet."
+            : "A public website is required before site extraction can run."),
+      updatedAtLabel: crawlJob ? formatDateTime(crawlJob.updatedAt) : undefined,
+    },
+    {
+      id: "pain",
+      label: "Generate pains",
+      status: painJob
+        ? mapPipelineJobStatus(painJob.status)
+        : hasPain
+          ? latestPain?.insufficientEvidence
+            ? "PARTIAL"
+            : "SUCCEEDED"
+          : company.crawlPages.length > 0
+            ? "NOT_STARTED"
+            : "BLOCKED",
+      detail:
+        readStageSummaryNote(painJob) ??
+        (hasPain
+          ? latestPain?.insufficientEvidence
+            ? "Pain hypothesis saved, but the public evidence is still thin."
+            : "Pain hypothesis generated from the current evidence."
+          : company.crawlPages.length > 0
+            ? "Pain generation has not run yet."
+            : "Run site extraction or add more public evidence before generating pains."),
+      updatedAtLabel: painJob ? formatDateTime(painJob.updatedAt) : undefined,
+    },
+    {
+      id: "score",
+      label: "Score lead",
+      status: scoreJob
+        ? mapPipelineJobStatus(scoreJob.status)
+        : company.leadScores.length > 0
+          ? "SUCCEEDED"
+          : hasPain
+            ? "NOT_STARTED"
+            : "BLOCKED",
+      detail:
+        readStageSummaryNote(scoreJob) ??
+        (company.leadScores.length > 0
+          ? "Lead score saved."
+          : hasPain
+            ? "Lead scoring has not run yet."
+            : "Generate a pain hypothesis before scoring the lead."),
+      updatedAtLabel: scoreJob ? formatDateTime(scoreJob.updatedAt) : undefined,
+    },
+    {
+      id: "magnet",
+      label: "Create lead magnet",
+      status: leadMagnetJob
+        ? mapPipelineJobStatus(leadMagnetJob.status)
+        : hasLeadMagnet
+          ? "SUCCEEDED"
+          : hasPain
+            ? "NOT_STARTED"
+            : "BLOCKED",
+      detail:
+        readStageSummaryNote(leadMagnetJob) ??
+        (hasLeadMagnet
+          ? "Lead magnet created."
+          : hasPain
+            ? "Lead magnet generation has not run yet."
+            : "Generate a pain hypothesis before creating a lead magnet."),
+      updatedAtLabel: leadMagnetJob ? formatDateTime(leadMagnetJob.updatedAt) : undefined,
+    },
+    {
+      id: "form",
+      label: "Generate form",
+      status: latestDiagnosticForm
+        ? latestDiagnosticForm.formLink?.url
+          ? "SUCCEEDED"
+          : "PARTIAL"
+        : hasPain
+          ? "NOT_STARTED"
+          : "BLOCKED",
+      detail: latestDiagnosticForm
+        ? latestDiagnosticForm.formLink?.url
+          ? "Diagnostic blueprint saved and a live Google Form is attached."
+          : "Diagnostic blueprint saved. Connect Google Workspace to create a live Google Form."
+        : hasPain
+          ? "Diagnostic form generation has not run yet."
+          : "Generate a pain hypothesis before creating a diagnostic form.",
+    },
+    {
+      id: "outreach",
+      label: "Draft outreach",
+      status: outreachJob
+        ? mapPipelineJobStatus(outreachJob.status)
+        : company.outreachDrafts.length > 0
+          ? "SUCCEEDED"
+          : hasLeadMagnet
+            ? contactEmailCount > 0
+              ? "NOT_STARTED"
+              : "BLOCKED"
+            : "BLOCKED",
+      detail:
+        readStageSummaryNote(outreachJob) ??
+        (company.outreachDrafts.length > 0
+          ? `${company.outreachDrafts.length} outreach draft${company.outreachDrafts.length === 1 ? "" : "s"} generated.`
+          : contactEmailCount > 0
+            ? "Outreach generation has not run yet."
+            : "No valid contacts with email were available for outreach drafts."),
+      updatedAtLabel: outreachJob ? formatDateTime(outreachJob.updatedAt) : undefined,
+    },
+  ];
+
+  return {
+    completedCount: stages.filter((stage) => stage.status === "SUCCEEDED" || stage.status === "PARTIAL").length,
+    totalCount: stages.length,
+    stages,
+  };
 }
 
 export async function getLeadSummaries(input?: {
@@ -81,7 +347,13 @@ export async function getLeadSummaries(input?: {
         sourceConfidence: company.sourceConfidence ?? undefined,
         contactsCount: company.contacts.length,
         manualReviewRequired: company.manualReviewRequired,
-        status: company.status,
+        status: deriveDisplayedCompanyStatus({
+          status: company.status,
+          manualReviewRequired: company.manualReviewRequired,
+          hasRecentPipelineOutput: Boolean(
+            company.leadScores[0] || company.painHypotheses[0] || company.outreachDrafts[0],
+          ),
+        }),
         approvalStatus: company.outreachDrafts[0]?.approvalStatus,
       })),
       pagination: {
@@ -317,6 +589,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         technologyProfiles: {
           orderBy: { confidence: "desc" },
         },
+        crawlPages: {
+          orderBy: { extractedAt: "desc" },
+        },
         newsMentions: {
           orderBy: { publishedAt: "desc" },
         },
@@ -362,6 +637,9 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
             formLink: true,
           },
         },
+        enrichmentJobs: {
+          orderBy: { updatedAt: "desc" },
+        },
       },
     });
 
@@ -381,9 +659,23 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         scoreLabel: formatScore(company.leadScores[0]?.totalScore),
         sourceConfidenceLabel: formatConfidence(company.sourceConfidence),
         manualReviewRequired: company.manualReviewRequired,
-        status: company.status,
+        status: deriveDisplayedCompanyStatus({
+          status: company.status,
+          manualReviewRequired: company.manualReviewRequired,
+          hasRecentPipelineOutput: Boolean(
+            company.leadScores[0] ||
+              company.painHypotheses[0] ||
+              company.leadMagnets[0] ||
+              company.diagnosticForms[0] ||
+              company.outreachDrafts[0],
+          ),
+          hasRunningJob: company.enrichmentJobs.some(
+            (job) => job.status === JobStatus.PENDING || job.status === JobStatus.RUNNING,
+          ),
+        }),
         hasWebsite: Boolean(company.website),
       },
+      pipeline: buildLeadPipeline(company),
       contacts: company.contacts.map((contact) => ({
         id: contact.id,
         fullName: contact.fullName,

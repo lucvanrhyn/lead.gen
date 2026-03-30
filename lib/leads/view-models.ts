@@ -35,6 +35,28 @@ export type CampaignAnalytics = {
   suppressedCount: number;
 };
 
+export type LeadPipelineStageStatus =
+  | "NOT_STARTED"
+  | "BLOCKED"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "PARTIAL"
+  | "FAILED";
+
+export type LeadPipelineStageViewModel = {
+  id: string;
+  label: string;
+  status: LeadPipelineStageStatus;
+  detail: string;
+  updatedAtLabel?: string;
+};
+
+export type LeadPipelineViewModel = {
+  completedCount: number;
+  totalCount: number;
+  stages: LeadPipelineStageViewModel[];
+};
+
 export type GoogleWorkspaceStatusViewModel = {
   status: "CONFIG_INCOMPLETE" | "DISCONNECTED" | "ERROR" | "CONNECTED";
   canStartOAuth: boolean;
@@ -76,6 +98,7 @@ export type LeadDetailViewModel = {
     status: string;
     hasWebsite: boolean;
   };
+  pipeline: LeadPipelineViewModel;
   contacts: Array<{
     id: string;
     fullName: string;
