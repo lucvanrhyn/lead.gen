@@ -10,7 +10,13 @@ type DatabaseEnv = {
 };
 
 export function getDatabaseConnectionString(env: DatabaseEnv = process.env) {
-  return env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+  const configured = env.DATABASE_URL?.trim();
+
+  if (!configured) {
+    return DEFAULT_DATABASE_URL;
+  }
+
+  return configured.replace(/^DATABASE_URL=/, "");
 }
 
 export function createPrismaAdapter(env: DatabaseEnv = process.env) {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getOperatorSessionFromCookieHeader } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
+import { getGoogleOAuthConfig } from "@/lib/config/env";
 import {
   encryptGoogleWorkspaceToken,
   exchangeGoogleWorkspaceCode,
@@ -119,7 +120,7 @@ export async function GET(request: Request) {
     const existingConnection = await db.googleWorkspaceConnection.findUnique({
       where: { provider: "google_workspace" },
     });
-    const tokens = await exchangeGoogleWorkspaceCode(code);
+    const tokens = await exchangeGoogleWorkspaceCode(code, process.env);
     const profile = await fetchGoogleWorkspaceProfile(tokens.accessToken);
     const encryptedRefreshToken = tokens.refreshToken
       ? encryptGoogleWorkspaceToken(tokens.refreshToken)
@@ -166,6 +167,10 @@ export async function GET(request: Request) {
 
     return clearOAuthStateCookie(createCallbackRedirect(request, { status: "connected" }));
   } catch (error) {
+    console.error("Google Workspace callback failed", {
+      redirectUri: getGoogleOAuthConfig(process.env).redirectUri,
+      message: error instanceof Error ? error.message : "Unknown Google Workspace callback error.",
+    });
     await persistWorkspaceError(
       error instanceof Error ? error.message : "Google Workspace callback failed.",
     );

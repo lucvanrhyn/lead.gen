@@ -91,7 +91,7 @@ describe("google workspace connect route", () => {
 
     const response = await GET(request);
 
-    expect(exchangeAuthCode).toHaveBeenCalledWith("test-code");
+    expect(exchangeAuthCode).toHaveBeenCalledWith("test-code", expect.any(Object));
     expect(fetchGoogleWorkspaceProfile).toHaveBeenCalled();
     expect(upsertConnection).toHaveBeenCalled();
     expect(response.status).toBe(307);

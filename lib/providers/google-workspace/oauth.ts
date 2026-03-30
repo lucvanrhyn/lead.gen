@@ -78,19 +78,65 @@ export async function exchangeGoogleWorkspaceCode(
   code: string,
   env: GoogleWorkspaceEnv = process.env,
 ) {
-  const client = createGoogleOAuthClient(env);
-  const { tokens } = await client.getToken(code);
+  const config = getGoogleOAuthConfig(env);
 
-  if (!tokens.access_token) {
-    throw new Error("Google OAuth exchange did not return an access token.");
+  try {
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        redirect_uri: config.redirectUri,
+        grant_type: "authorization_code",
+      }).toString(),
+    });
+    const responseBody = await response.text();
+
+    if (!response.ok) {
+      console.error("Google OAuth token exchange failed", {
+        redirectUri: config.redirectUri,
+        status: response.status,
+        responseBody,
+      });
+      throw new Error(`Google OAuth token exchange failed: ${responseBody}`);
+    }
+
+    const tokens = JSON.parse(responseBody) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      scope?: string;
+    };
+
+    if (!tokens.access_token) {
+      console.error("Google OAuth token exchange failed", {
+        redirectUri: config.redirectUri,
+        status: response.status,
+        responseBody,
+      });
+      throw new Error("Google OAuth exchange did not return an access token.");
+    }
+
+    return {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      expiryDate: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000) : null,
+      scopes: tokens.scope?.split(" ").filter(Boolean) ?? [...GOOGLE_WORKSPACE_SCOPES],
+    };
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("Google OAuth token exchange failed")) {
+      console.error("Google OAuth token exchange failed", {
+        redirectUri: config.redirectUri,
+        error: error instanceof Error ? error.message : "Unknown token exchange error.",
+      });
+    }
+
+    throw error;
   }
-
-  return {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiryDate: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-    scopes: tokens.scope?.split(" ").filter(Boolean) ?? [...GOOGLE_WORKSPACE_SCOPES],
-  };
 }
 
 export async function fetchGoogleWorkspaceProfile(
