@@ -229,6 +229,10 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
         status: true,
         email: true,
         scopes: true,
+        gmailWatchStatus: true,
+        gmailWatchExpiresAt: true,
+        gmailWatchLastNotificationAt: true,
+        gmailWatchLastError: true,
       },
     });
 
@@ -241,6 +245,16 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
     return {
       ...state,
       ...copy,
+      gmailWatchStatus: connection?.gmailWatchStatus ?? "NOT_READY",
+      gmailWatchExpiresAtLabel: connection?.gmailWatchExpiresAt
+        ? formatDateTime(connection.gmailWatchExpiresAt)
+        : undefined,
+      gmailWatchLastNotificationAtLabel: connection?.gmailWatchLastNotificationAt
+        ? formatDateTime(connection.gmailWatchLastNotificationAt)
+        : undefined,
+      gmailWatchLastError: connection?.gmailWatchLastError ?? undefined,
+      canRegisterGmailWatch:
+        state.status === "CONNECTED" && Boolean(process.env.GOOGLE_GMAIL_PUBSUB_TOPIC),
     };
   } catch {
     const state = deriveGoogleWorkspaceState({
@@ -252,6 +266,8 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
     return {
       ...state,
       ...copy,
+      gmailWatchStatus: "NOT_READY",
+      canRegisterGmailWatch: false,
     };
   }
 }

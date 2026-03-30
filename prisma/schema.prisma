@@ -581,6 +581,12 @@ model GoogleWorkspaceConnection {
   encryptedAccessToken String?                   @map("encrypted_access_token")
   encryptedRefreshToken String?                  @map("encrypted_refresh_token")
   accessTokenExpiresAt DateTime?                 @map("access_token_expires_at")
+  gmailWatchTopic      String?                   @map("gmail_watch_topic")
+  gmailWatchHistoryId  String?                   @map("gmail_watch_history_id")
+  gmailWatchExpiresAt  DateTime?                 @map("gmail_watch_expires_at")
+  gmailWatchStatus     ExternalSyncStatus        @default(NOT_READY) @map("gmail_watch_status")
+  gmailWatchLastError  String?                   @map("gmail_watch_last_error")
+  gmailWatchLastNotificationAt DateTime?         @map("gmail_watch_last_notification_at")
   status               WorkspaceConnectionStatus @default(DISCONNECTED)
   lastError            String?                   @map("last_error")
   createdAt            DateTime                  @default(now()) @map("created_at")
@@ -588,5 +594,6 @@ model GoogleWorkspaceConnection {
 
   @@unique([provider])
   @@index([status])
+  @@index([gmailWatchStatus])
   @@map("google_workspace_connections")
 }

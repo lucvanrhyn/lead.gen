@@ -1,10 +1,9 @@
-import { ApprovalStatus, EngagementEventType, ExternalSyncStatus } from "@prisma/client";
+import { ApprovalStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import {
-  fetchGoogleWorkspaceGmailThread,
-} from "@/lib/providers/google-workspace/gmail";
+import { syncGmailReplyStateForDraft } from "@/lib/domain/gmail-engagement";
+import { fetchGoogleWorkspaceGmailThread } from "@/lib/providers/google-workspace/gmail";
 import { createAuthorizedGoogleClient } from "@/lib/providers/google-workspace/oauth";
 
 export async function POST(
@@ -65,75 +64,21 @@ export async function POST(
       auth,
       threadId: draft.gmailDraftLink.gmailThreadId,
     });
-    const now = new Date();
-
-    const gmailDraftLink = await db.gmailDraftLink.upsert({
-      where: { outreachDraftId: id },
-      create: {
-        outreachDraftId: id,
-        gmailDraftId: draft.gmailDraftLink.gmailDraftId,
-        gmailThreadId: thread.threadId,
-        syncStatus: ExternalSyncStatus.SYNCED,
-        lastSyncedAt: now,
+    const { gmailDraftLink, replyEventCreated } = await syncGmailReplyStateForDraft({
+      db,
+      draft: {
+        id: draft.id,
+        companyId: draft.companyId,
+        contactId: draft.contactId,
+        gmailDraftLink: {
+          gmailDraftId: draft.gmailDraftLink.gmailDraftId,
+          gmailThreadId: draft.gmailDraftLink.gmailThreadId,
+          syncStatus: draft.gmailDraftLink.syncStatus,
+        },
+        childDrafts: draft.childDrafts,
       },
-      update: {
-        gmailDraftId: draft.gmailDraftLink.gmailDraftId,
-        gmailThreadId: thread.threadId,
-        syncStatus: ExternalSyncStatus.SYNCED,
-        lastSyncedAt: now,
-      },
+      thread,
     });
-
-    let replyEventCreated = false;
-    if (thread.hasReply) {
-      const existingReply = await db.outreachEngagementEvent.findFirst({
-        where: {
-          outreachDraftId: id,
-          eventType: EngagementEventType.REPLY,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!existingReply) {
-        await db.outreachEngagementEvent.create({
-          data: {
-            outreachDraftId: id,
-            companyId: draft.companyId,
-            contactId: draft.contactId,
-            eventType: EngagementEventType.REPLY,
-            followUpCreated: false,
-            payload: {
-              threadId: thread.threadId,
-              accountEmail: thread.accountEmail,
-              messageCount: thread.messageCount,
-              sentAt: thread.sentAt,
-              latestMessageAt: thread.latestMessageAt,
-              latestMessageDirection: thread.latestMessageDirection,
-              hasReply: thread.hasReply,
-              replyDetectedAt: thread.replyDetectedAt,
-              replyMessageId: thread.replyMessageId,
-              messages: thread.messages,
-            },
-          },
-        });
-        if (draft.childDrafts.length > 0) {
-          await db.outreachDraft.updateMany({
-            where: {
-              id: {
-                in: draft.childDrafts.map((childDraft) => childDraft.id),
-              },
-            },
-            data: {
-              approvalStatus: ApprovalStatus.REJECTED,
-              approvalNotes: "Reply detected in Gmail thread.",
-            },
-          });
-        }
-        replyEventCreated = true;
-      }
-    }
 
     return NextResponse.json({
       gmailDraftLink,

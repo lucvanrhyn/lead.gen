@@ -11,6 +11,17 @@ type GmailThreadInput = {
   threadId: string;
 };
 
+type GmailWatchInput = {
+  auth: unknown;
+  topicName: string;
+  labelIds?: string[];
+};
+
+type GmailHistoryInput = {
+  auth: unknown;
+  startHistoryId: string;
+};
+
 type GmailThreadApiMessage = {
   id?: string | null;
   threadId?: string | null;
@@ -53,6 +64,17 @@ export type GmailThreadSnapshot = {
   replyDetectedAt: string | null;
   replyMessageId: string | null;
   messages: GmailThreadMessageSnapshot[];
+};
+
+export type GmailWatchRegistration = {
+  historyId: string | null;
+  expiration: string | null;
+  topicName: string;
+};
+
+export type GmailHistorySnapshot = {
+  historyId: string | null;
+  threadIds: string[];
 };
 
 function getHeaderValue(
@@ -196,6 +218,61 @@ export async function createGoogleWorkspaceGmailDraft(input: GmailDraftInput & {
     gmailMessageId: response.data.message?.id ?? null,
     gmailThreadId: response.data.message?.threadId ?? null,
   };
+}
+
+export async function registerGoogleWorkspaceGmailWatch(input: GmailWatchInput) {
+  const gmail = google.gmail({ version: "v1", auth: input.auth as never });
+  const response = await gmail.users.watch({
+    userId: "me",
+    requestBody: {
+      topicName: input.topicName,
+      labelIds: input.labelIds?.length ? input.labelIds : ["INBOX"],
+      labelFilterBehavior: "INCLUDE",
+    },
+  });
+
+  return {
+    historyId: response.data.historyId ?? null,
+    expiration: response.data.expiration
+      ? new Date(Number(response.data.expiration)).toISOString()
+      : null,
+    topicName: input.topicName,
+  } satisfies GmailWatchRegistration;
+}
+
+export async function fetchGoogleWorkspaceGmailHistory(input: GmailHistoryInput) {
+  const gmail = google.gmail({ version: "v1", auth: input.auth as never });
+  const threadIds = new Set<string>();
+  let pageToken: string | undefined;
+  let latestHistoryId: string | null = null;
+
+  do {
+    const response = await gmail.users.history.list({
+      userId: "me",
+      startHistoryId: input.startHistoryId,
+      historyTypes: ["messageAdded"],
+      pageToken,
+    });
+
+    latestHistoryId = response.data.historyId ?? latestHistoryId;
+
+    for (const entry of response.data.history ?? []) {
+      for (const added of entry.messagesAdded ?? []) {
+        const threadId = added.message?.threadId ?? null;
+        const labelIds = added.message?.labelIds ?? [];
+        if (threadId && labelIds.includes("INBOX")) {
+          threadIds.add(threadId);
+        }
+      }
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return {
+    historyId: latestHistoryId,
+    threadIds: [...threadIds],
+  } satisfies GmailHistorySnapshot;
 }
 
 export async function fetchGoogleWorkspaceGmailThread(input: GmailThreadInput) {

@@ -344,9 +344,12 @@ describe("GoogleWorkspaceStatus", () => {
         workspace={{
           status: "CONNECTED",
           canStartOAuth: true,
+          canRegisterGmailWatch: true,
           connectedEmail: "operator@example.com",
           title: "Google Workspace connected",
           description: "Approved drafts can now create Gmail drafts and sync to your operator sheet.",
+          gmailWatchStatus: "SYNCED",
+          gmailWatchExpiresAtLabel: "2026-04-06 10:00",
         }}
       />,
     );
@@ -354,5 +357,6 @@ describe("GoogleWorkspaceStatus", () => {
     expect(screen.getByText(/google workspace connected/i)).toBeInTheDocument();
     expect(screen.getByText(/operator@example.com/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /reconnect google/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /renew gmail watch/i })).toBeInTheDocument();
   });
 });

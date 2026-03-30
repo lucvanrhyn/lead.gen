@@ -1,4 +1,4 @@
-import { WorkspaceConnectionStatus } from "@prisma/client";
+import { ExternalSyncStatus, WorkspaceConnectionStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
@@ -47,6 +47,12 @@ export async function GET(request: Request) {
         encryptedRefreshToken,
         accessTokenExpiresAt: tokens.expiryDate,
         status: WorkspaceConnectionStatus.CONNECTED,
+        gmailWatchStatus: ExternalSyncStatus.NOT_READY,
+        gmailWatchHistoryId: null,
+        gmailWatchExpiresAt: null,
+        gmailWatchTopic: null,
+        gmailWatchLastError: null,
+        gmailWatchLastNotificationAt: null,
         lastError: null,
       },
       update: {
@@ -56,6 +62,12 @@ export async function GET(request: Request) {
         encryptedRefreshToken,
         accessTokenExpiresAt: tokens.expiryDate,
         status: WorkspaceConnectionStatus.CONNECTED,
+        gmailWatchStatus: ExternalSyncStatus.NOT_READY,
+        gmailWatchHistoryId: null,
+        gmailWatchExpiresAt: null,
+        gmailWatchTopic: null,
+        gmailWatchLastError: null,
+        gmailWatchLastNotificationAt: null,
         lastError: null,
       },
     });

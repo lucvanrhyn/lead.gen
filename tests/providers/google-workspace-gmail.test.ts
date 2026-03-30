@@ -1,13 +1,19 @@
 const gmailGetProfile = vi.fn();
 const gmailThreadGet = vi.fn();
+const gmailWatch = vi.fn();
+const gmailHistoryList = vi.fn();
 
 vi.mock("googleapis", () => ({
   google: {
     gmail: vi.fn(() => ({
       users: {
         getProfile: gmailGetProfile,
+        watch: gmailWatch,
         threads: {
           get: gmailThreadGet,
+        },
+        history: {
+          list: gmailHistoryList,
         },
       },
     })),
@@ -17,7 +23,9 @@ vi.mock("googleapis", () => ({
 import {
   appendOutreachDeliveryLinks,
   buildGmailDraftRawMessage,
+  fetchGoogleWorkspaceGmailHistory,
   fetchGoogleWorkspaceGmailThread,
+  registerGoogleWorkspaceGmailWatch,
 } from "@/lib/providers/google-workspace/gmail";
 
 describe("buildGmailDraftRawMessage", () => {
@@ -137,6 +145,87 @@ describe("fetchGoogleWorkspaceGmailThread", () => {
       direction: "INBOUND",
       isReply: true,
       fromEmail: "megan@atlasdental.co.za",
+    });
+  });
+});
+
+describe("registerGoogleWorkspaceGmailWatch", () => {
+  it("registers an inbox watch and normalizes the expiration date", async () => {
+    gmailWatch.mockResolvedValueOnce({
+      data: {
+        historyId: "history-99",
+        expiration: "1777777777000",
+      },
+    });
+
+    const watch = await registerGoogleWorkspaceGmailWatch({
+      auth: { token: "oauth-token" },
+      topicName: "projects/demo/topics/lead-engine-gmail",
+      labelIds: ["INBOX"],
+    });
+
+    expect(gmailWatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "me",
+        requestBody: expect.objectContaining({
+          topicName: "projects/demo/topics/lead-engine-gmail",
+          labelIds: ["INBOX"],
+          labelFilterBehavior: "INCLUDE",
+        }),
+      }),
+    );
+    expect(watch.historyId).toBe("history-99");
+    expect(watch.expiration).toBe("2026-05-03T03:09:37.000Z");
+  });
+});
+
+describe("fetchGoogleWorkspaceGmailHistory", () => {
+  it("collects unique inbox thread ids from Gmail history", async () => {
+    gmailHistoryList.mockResolvedValueOnce({
+      data: {
+        historyId: "history-200",
+        history: [
+          {
+            messagesAdded: [
+              {
+                message: {
+                  threadId: "thread-1",
+                  labelIds: ["INBOX"],
+                },
+              },
+              {
+                message: {
+                  threadId: "thread-1",
+                  labelIds: ["INBOX"],
+                },
+              },
+              {
+                message: {
+                  threadId: "thread-2",
+                  labelIds: ["SENT"],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const history = await fetchGoogleWorkspaceGmailHistory({
+      auth: { token: "oauth-token" },
+      startHistoryId: "history-100",
+    });
+
+    expect(gmailHistoryList).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "me",
+        startHistoryId: "history-100",
+        historyTypes: ["messageAdded"],
+      }),
+    );
+    expect(history).toEqual({
+      historyId: "history-200",
+      threadIds: ["thread-1"],
     });
   });
 });

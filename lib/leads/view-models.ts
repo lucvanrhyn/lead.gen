@@ -34,6 +34,11 @@ export type GoogleWorkspaceStatusViewModel = {
   connectedEmail?: string;
   title: string;
   description: string;
+  gmailWatchStatus?: string;
+  gmailWatchExpiresAtLabel?: string;
+  gmailWatchLastNotificationAtLabel?: string;
+  gmailWatchLastError?: string;
+  canRegisterGmailWatch: boolean;
 };
 
 export type ApprovalQueueItem = {

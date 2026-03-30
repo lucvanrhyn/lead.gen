@@ -2,28 +2,17 @@ export {};
 
 const findDraft = vi.fn();
 const findConnection = vi.fn();
-const gmailUpsert = vi.fn();
-const findReplyEvent = vi.fn();
-const createReplyEvent = vi.fn();
-const updateManyDrafts = vi.fn();
 const createAuthorizedGoogleClient = vi.fn();
 const fetchGoogleWorkspaceGmailThread = vi.fn();
+const syncGmailReplyStateForDraft = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   db: {
     outreachDraft: {
       findUnique: findDraft,
-      updateMany: updateManyDrafts,
     },
     googleWorkspaceConnection: {
       findUnique: findConnection,
-    },
-    gmailDraftLink: {
-      upsert: gmailUpsert,
-    },
-    outreachEngagementEvent: {
-      findFirst: findReplyEvent,
-      create: createReplyEvent,
     },
   },
 }));
@@ -34,6 +23,10 @@ vi.mock("@/lib/providers/google-workspace/oauth", () => ({
 
 vi.mock("@/lib/providers/google-workspace/gmail", () => ({
   fetchGoogleWorkspaceGmailThread,
+}));
+
+vi.mock("@/lib/domain/gmail-engagement", () => ({
+  syncGmailReplyStateForDraft,
 }));
 
 describe("refresh gmail thread route", () => {
@@ -84,15 +77,12 @@ describe("refresh gmail thread route", () => {
         },
       ],
     });
-    findReplyEvent.mockResolvedValueOnce(null);
-    gmailUpsert.mockResolvedValueOnce({
+    syncGmailReplyStateForDraft.mockResolvedValueOnce({
       id: "gmail-link-1",
-      syncStatus: "SYNCED",
-      lastSyncedAt: new Date("2026-03-30T10:00:00.000Z"),
-    });
-    createReplyEvent.mockResolvedValueOnce({
-      id: "event-1",
-      eventType: "REPLY",
+      replyEventCreated: true,
+      gmailDraftLink: {
+        syncStatus: "SYNCED",
+      },
     });
 
     const { POST } = await import(
@@ -109,41 +99,13 @@ describe("refresh gmail thread route", () => {
         threadId: "thread-1",
       }),
     );
-    expect(gmailUpsert).toHaveBeenCalledWith(
+    expect(syncGmailReplyStateForDraft).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({
-          syncStatus: "SYNCED",
+        draft: expect.objectContaining({
+          id: "draft-1",
         }),
-      }),
-    );
-    expect(findReplyEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          outreachDraftId: "draft-1",
-          eventType: "REPLY",
-        }),
-      }),
-    );
-    expect(createReplyEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          outreachDraftId: "draft-1",
-          eventType: "REPLY",
-          payload: expect.objectContaining({
-            hasReply: true,
-          }),
-        }),
-      }),
-    );
-    expect(updateManyDrafts).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          id: {
-            in: ["follow-up-1"],
-          },
-        },
-        data: expect.objectContaining({
-          approvalStatus: "REJECTED",
+        thread: expect.objectContaining({
+          hasReply: true,
         }),
       }),
     );
@@ -186,11 +148,12 @@ describe("refresh gmail thread route", () => {
         },
       ],
     });
-    findReplyEvent.mockResolvedValueOnce(null);
-    gmailUpsert.mockResolvedValueOnce({
+    syncGmailReplyStateForDraft.mockResolvedValueOnce({
       id: "gmail-link-1",
-      syncStatus: "SYNCED",
-      lastSyncedAt: new Date("2026-03-30T10:00:00.000Z"),
+      replyEventCreated: false,
+      gmailDraftLink: {
+        syncStatus: "SYNCED",
+      },
     });
 
     const { POST } = await import(
@@ -201,8 +164,7 @@ describe("refresh gmail thread route", () => {
     } as { params: Promise<{ id: string }> });
     const payload = await response.json();
 
-    expect(createReplyEvent).not.toHaveBeenCalled();
-    expect(updateManyDrafts).not.toHaveBeenCalled();
+    expect(syncGmailReplyStateForDraft).toHaveBeenCalled();
     expect(payload.replyEventCreated).toBe(false);
     expect(payload.thread.hasReply).toBe(false);
   });

@@ -150,3 +150,30 @@ export async function createAuthorizedGoogleClient(
 
   return auth;
 }
+
+export async function verifyGoogleWorkspacePushToken(input: {
+  idToken: string;
+  audience: string;
+  serviceAccountEmail?: string | null;
+}) {
+  const verifier = new google.auth.OAuth2();
+  const ticket = await verifier.verifyIdToken({
+    idToken: input.idToken,
+    audience: input.audience,
+  });
+  const payload = ticket.getPayload();
+
+  if (!payload) {
+    throw new Error("Google Pub/Sub push token payload was empty.");
+  }
+
+  if (payload.email_verified !== true) {
+    throw new Error("Google Pub/Sub push token email was not verified.");
+  }
+
+  if (input.serviceAccountEmail && payload.email !== input.serviceAccountEmail) {
+    throw new Error("Google Pub/Sub push token email did not match the configured service account.");
+  }
+
+  return payload;
+}

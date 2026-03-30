@@ -94,7 +94,7 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 
 To enable real Gmail draft handoff and Google Sheets syncing:
 
-1. In Google Cloud, enable the Gmail API and Google Sheets API.
+1. In Google Cloud, enable the Gmail API, Google Sheets API, Google Drive API, Google Forms API, and Cloud Pub/Sub API.
 2. Create an OAuth client for a web application.
 3. Register this redirect URI:
    - `http://localhost:3000/api/google-workspace/callback`
@@ -104,18 +104,30 @@ To enable real Gmail draft handoff and Google Sheets syncing:
    - `GOOGLE_OAUTH_REDIRECT_URI`
    - `GOOGLE_SHEETS_SPREADSHEET_ID`
    - `GOOGLE_WORKSPACE_TOKEN_SECRET`
+   - `GOOGLE_GMAIL_PUBSUB_TOPIC`
+   - `GOOGLE_GMAIL_PUSH_AUDIENCE`
+   - `GOOGLE_GMAIL_PUSH_SERVICE_ACCOUNT_EMAIL` (optional but recommended)
 
 `GOOGLE_WORKSPACE_TOKEN_SECRET` should be a long random string. The app uses it to encrypt stored Google access and refresh tokens before writing them to Postgres.
 
 Once configured:
 - open `/leads`
 - use the `Connect Google` action in the `Google Workspace` card
+- use `Start Gmail watch` once to register automatic Gmail engagement ingestion
 - approve an outreach draft
 - use `Create Gmail draft` to push it into Gmail
 - use `Sync to Sheets` to append or update the `Drafts` tab in your configured spreadsheet
 - use `Create live Google Form` and `Sync responses` on a lead to turn diagnostic submissions into lead-score updates
 
-If you connected Google Workspace before the Forms response sync layer was added, reconnect once so Google grants the latest Forms response scope. The app now checks for that scope and will prompt for reconnect if it is missing.
+If you connected Google Workspace before the Forms response sync layer or Gmail watch layer was added, reconnect once so Google grants the latest Gmail read and Forms response scopes. The app now checks for those scopes and will prompt for reconnect if they are missing.
+
+For automatic Gmail engagement ingestion:
+
+- Create a Pub/Sub topic and push subscription that targets `/api/google-workspace/gmail-watch/webhook`.
+- Set `GOOGLE_GMAIL_PUBSUB_TOPIC` to the full topic name, for example `projects/<project-id>/topics/<topic-name>`.
+- Set `GOOGLE_GMAIL_PUSH_AUDIENCE` to the public webhook URL you configure on the push subscription.
+- If you configure the push subscription with an authenticated service account, set `GOOGLE_GMAIL_PUSH_SERVICE_ACCOUNT_EMAIL` so the app can verify the caller.
+- Gmail watches expire, so renew them periodically. The app exposes a `Renew Gmail watch` action in the dashboard, and you can automate that route with a cron later if you want hands-off renewal.
 
 ## Optional HubSpot mirror
 

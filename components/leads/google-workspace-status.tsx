@@ -19,20 +19,49 @@ export function GoogleWorkspaceStatus({
             {workspace.description}
             {workspace.connectedEmail ? ` Connected as ${workspace.connectedEmail}.` : ""}
           </p>
+          {workspace.gmailWatchStatus ? (
+            <div className="text-xs uppercase tracking-[0.18em] text-[rgba(245,235,212,0.58)]">
+              Gmail watch {workspace.gmailWatchStatus.toLowerCase().replace(/_/g, " ")}
+              {workspace.gmailWatchExpiresAtLabel
+                ? ` · renew by ${workspace.gmailWatchExpiresAtLabel}`
+                : ""}
+              {workspace.gmailWatchLastNotificationAtLabel
+                ? ` · last notification ${workspace.gmailWatchLastNotificationAtLabel}`
+                : ""}
+            </div>
+          ) : null}
+          {workspace.gmailWatchLastError ? (
+            <p className="max-w-3xl text-sm leading-6 text-[rgba(245,190,170,0.84)]">
+              {workspace.gmailWatchLastError}
+            </p>
+          ) : null}
         </div>
 
-        {workspace.canStartOAuth ? (
-          <Link
-            className="inline-flex items-center justify-center rounded-full bg-cream px-5 py-3 text-sm font-semibold text-[#120f0c] transition hover:bg-[#efe3ca]"
-            href="/api/google-workspace/connect"
-          >
-            {workspace.status === "CONNECTED" ? "Reconnect Google" : "Connect Google"}
-          </Link>
-        ) : (
-          <div className="rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm text-[rgba(245,235,212,0.72)]">
-            Add env vars to enable connection
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {workspace.canStartOAuth ? (
+            <Link
+              className="inline-flex items-center justify-center rounded-full bg-cream px-5 py-3 text-sm font-semibold text-[#120f0c] transition hover:bg-[#efe3ca]"
+              href="/api/google-workspace/connect"
+            >
+              {workspace.status === "CONNECTED" ? "Reconnect Google" : "Connect Google"}
+            </Link>
+          ) : (
+            <div className="rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm text-[rgba(245,235,212,0.72)]">
+              Add env vars to enable connection
+            </div>
+          )}
+
+          {workspace.canRegisterGmailWatch ? (
+            <form action="/api/google-workspace/gmail-watch/register" method="post">
+              <button
+                className="inline-flex items-center justify-center rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm font-semibold text-cream transition hover:border-[rgba(210,180,140,0.32)]"
+                type="submit"
+              >
+                {workspace.gmailWatchStatus === "SYNCED" ? "Renew Gmail watch" : "Start Gmail watch"}
+              </button>
+            </form>
+          ) : null}
+        </div>
       </div>
     </section>
   );
