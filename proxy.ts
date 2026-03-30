@@ -9,6 +9,7 @@ function isPublicPath(pathname: string) {
     pathname.startsWith("/assets/") ||
     pathname.startsWith("/api/internal/") ||
     pathname.startsWith("/api/auth/") ||
+    pathname === "/api/google-workspace/callback" ||
     pathname === "/api/google-workspace/gmail-watch/webhook"
   );
 }

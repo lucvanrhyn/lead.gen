@@ -1,5 +1,7 @@
 export {};
 
+import { createOperatorSessionToken } from "@/lib/auth/session";
+
 const createAuthUrl = vi.fn();
 const exchangeAuthCode = vi.fn();
 const fetchGoogleWorkspaceProfile = vi.fn();
@@ -25,6 +27,7 @@ vi.mock("@/lib/db", () => ({
 
 describe("google workspace connect route", () => {
   const originalEnv = process.env;
+  let operatorSessionToken: string;
 
   beforeEach(() => {
     vi.resetModules();
@@ -36,7 +39,9 @@ describe("google workspace connect route", () => {
       GOOGLE_OAUTH_REDIRECT_URI: "http://localhost:3000/api/google-workspace/callback",
       GOOGLE_SHEETS_SPREADSHEET_ID: "sheet-id",
       GOOGLE_WORKSPACE_TOKEN_SECRET: "token-secret",
+      OPERATOR_SESSION_SECRET: "session-secret-value",
     };
+    operatorSessionToken = createOperatorSessionToken("owner@example.com", process.env);
   });
 
   afterAll(() => {
@@ -79,7 +84,7 @@ describe("google workspace connect route", () => {
       "http://localhost:3000/api/google-workspace/callback?code=test-code&state=match-state",
       {
         headers: {
-          cookie: "google_workspace_oauth_state=match-state",
+          cookie: `google_workspace_oauth_state=match-state; leadgen_operator_session=${operatorSessionToken}`,
         },
       },
     );
@@ -91,5 +96,93 @@ describe("google workspace connect route", () => {
     expect(upsertConnection).toHaveBeenCalled();
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost:3000/leads?workspace=connected");
+    expect(response.cookies.get("google_workspace_oauth_state")?.value).toBe("");
+  });
+
+  it("redirects with a clear error when the callback is missing the authorization code", async () => {
+    const { GET } = await import("@/app/api/google-workspace/callback/route");
+    const request = new Request(
+      "http://localhost:3000/api/google-workspace/callback?state=match-state",
+      {
+        headers: {
+          cookie: `google_workspace_oauth_state=match-state; leadgen_operator_session=${operatorSessionToken}`,
+        },
+      },
+    );
+
+    const response = await GET(request);
+
+    expect(exchangeAuthCode).not.toHaveBeenCalled();
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/leads?workspace=error&reason=missing_code",
+    );
+    expect(upsertConnection).toHaveBeenCalledWith({
+      where: { provider: "google_workspace" },
+      create: {
+        provider: "google_workspace",
+        scopes: [],
+        status: "ERROR",
+        lastError: "Google OAuth callback did not include an authorization code.",
+      },
+      update: {
+        status: "ERROR",
+        lastError: "Google OAuth callback did not include an authorization code.",
+      },
+    });
+  });
+
+  it("redirects with a clear error when state validation fails", async () => {
+    const { GET } = await import("@/app/api/google-workspace/callback/route");
+    const request = new Request(
+      "http://localhost:3000/api/google-workspace/callback?code=test-code&state=wrong-state",
+      {
+        headers: {
+          cookie: `google_workspace_oauth_state=match-state; leadgen_operator_session=${operatorSessionToken}`,
+        },
+      },
+    );
+
+    const response = await GET(request);
+
+    expect(exchangeAuthCode).not.toHaveBeenCalled();
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/leads?workspace=error&reason=invalid_state",
+    );
+  });
+
+  it("redirects with the Google OAuth error reason when Google returns one", async () => {
+    const { GET } = await import("@/app/api/google-workspace/callback/route");
+    const request = new Request(
+      "http://localhost:3000/api/google-workspace/callback?error=access_denied&state=match-state",
+      {
+        headers: {
+          cookie: `google_workspace_oauth_state=match-state; leadgen_operator_session=${operatorSessionToken}`,
+        },
+      },
+    );
+
+    const response = await GET(request);
+
+    expect(exchangeAuthCode).not.toHaveBeenCalled();
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/leads?workspace=error&reason=access_denied",
+    );
+  });
+
+  it("redirects unauthenticated callback failures to login with a visible error", async () => {
+    const { GET } = await import("@/app/api/google-workspace/callback/route");
+    const request = new Request(
+      "http://localhost:3000/api/google-workspace/callback?state=match-state",
+    );
+
+    const response = await GET(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/login?error=google_workspace_callback",
+    );
   });
 });

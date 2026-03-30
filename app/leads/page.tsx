@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; workspace?: string; reason?: string }>;
 }) {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
@@ -26,6 +26,18 @@ export default async function LeadsPage({
   const origin = host ? `${protocol}://${host}` : undefined;
   const params = await searchParams;
   const page = Number(params.page ?? "1");
+  const workspaceNotice =
+    params.workspace === "connected"
+      ? {
+          tone: "success" as const,
+          message: "Google Workspace connected successfully.",
+        }
+      : params.workspace === "error"
+        ? {
+            tone: "error" as const,
+            message: getWorkspaceErrorMessage(params.reason),
+          }
+        : undefined;
   const [leadTable, approvalQueue, workspace] = await Promise.all([
     getLeadSummaries({
       page: Number.isFinite(page) ? page : 1,
@@ -62,7 +74,7 @@ export default async function LeadsPage({
         </div>
 
         <DiscoveryForm />
-        <GoogleWorkspaceStatus workspace={workspace} />
+        <GoogleWorkspaceStatus workspace={workspace} notice={workspaceNotice} />
         <ApprovalQueue
           items={approvalQueue.items}
           summary={approvalQueue.summary}
@@ -73,4 +85,19 @@ export default async function LeadsPage({
       </div>
     </main>
   );
+}
+
+function getWorkspaceErrorMessage(reason?: string) {
+  switch (reason) {
+    case "access_denied":
+      return "Google sign-in was cancelled before access was granted.";
+    case "missing_code":
+      return "Google sign-in finished without returning an authorization code. Please try again.";
+    case "invalid_state":
+      return "Google sign-in could not be verified. Start the connection again from the dashboard.";
+    case "token_exchange_failed":
+      return "Google sign-in completed, but token exchange failed. Please reconnect and try again.";
+    default:
+      return "Google Workspace could not be connected. Please try again.";
+  }
 }

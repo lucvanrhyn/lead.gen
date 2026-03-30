@@ -260,6 +260,7 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
         status: true,
         email: true,
         scopes: true,
+        lastError: true,
         gmailWatchStatus: true,
         gmailWatchExpiresAt: true,
         gmailWatchLastNotificationAt: true,
@@ -276,6 +277,7 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
     return {
       ...state,
       ...copy,
+      lastError: connection?.lastError ?? undefined,
       gmailWatchStatus: connection?.gmailWatchStatus ?? "NOT_READY",
       gmailWatchExpiresAtLabel: connection?.gmailWatchExpiresAt
         ? formatDateTime(connection.gmailWatchExpiresAt)
@@ -297,6 +299,7 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
     return {
       ...state,
       ...copy,
+      lastError: undefined,
       gmailWatchStatus: "NOT_READY",
       canRegisterGmailWatch: false,
     };

@@ -41,6 +41,7 @@ export type GoogleWorkspaceStatusViewModel = {
   connectedEmail?: string;
   title: string;
   description: string;
+  lastError?: string;
   gmailWatchStatus?: string;
   gmailWatchExpiresAtLabel?: string;
   gmailWatchLastNotificationAtLabel?: string;

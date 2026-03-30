@@ -2,8 +2,13 @@ import { type GoogleWorkspaceStatusViewModel } from "@/lib/leads/view-models";
 
 export function GoogleWorkspaceStatus({
   workspace,
+  notice,
 }: {
   workspace: GoogleWorkspaceStatusViewModel;
+  notice?: {
+    tone: "success" | "error";
+    message: string;
+  };
 }) {
   return (
     <section className="dashboard-panel rounded-[2rem] p-6">
@@ -17,6 +22,22 @@ export function GoogleWorkspaceStatus({
             {workspace.description}
             {workspace.connectedEmail ? ` Connected as ${workspace.connectedEmail}.` : ""}
           </p>
+          {notice ? (
+            <p
+              className={`max-w-3xl text-sm leading-6 ${
+                notice.tone === "success"
+                  ? "text-[rgba(67,129,107,0.92)]"
+                  : "text-[rgba(186,92,82,0.92)]"
+              }`}
+            >
+              {notice.message}
+            </p>
+          ) : null}
+          {workspace.lastError ? (
+            <p className="max-w-3xl text-sm leading-6 text-[rgba(186,92,82,0.92)]">
+              {workspace.lastError}
+            </p>
+          ) : null}
           {workspace.gmailWatchStatus ? (
             <div className="text-xs uppercase tracking-[0.18em] text-[rgba(22,32,51,0.56)]">
               Gmail watch {workspace.gmailWatchStatus.toLowerCase().replace(/_/g, " ")}
