@@ -13,6 +13,7 @@ Apollo-first lead discovery and enrichment for high-quality B2B outreach.
 - Batch auto-run orchestration from discovery
 - Diagnostic Google Form blueprint generation and storage
 - Google Workspace handoff for Gmail drafts and Sheets sync
+- Optional HubSpot engagement mirroring
 
 ## Local setup
 1. Copy `.env.example` to `.env`
@@ -112,3 +113,15 @@ Once configured:
 - approve an outreach draft
 - use `Create Gmail draft` to push it into Gmail
 - use `Sync to Sheets` to append or update the `Drafts` tab in your configured spreadsheet
+
+## Optional HubSpot mirror
+
+HubSpot support is optional and only activates when `HUBSPOT_PRIVATE_APP_TOKEN` is set.
+
+- The app looks up or creates the matching company and contact when possible.
+- Outreach engagement can then be mirrored into HubSpot as a note on the matched records.
+- If the token is missing, the HubSpot sync route skips cleanly instead of blocking the outreach flow.
+
+Set this env var if you want the mirror flow:
+
+- `HUBSPOT_PRIVATE_APP_TOKEN`

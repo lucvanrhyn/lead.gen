@@ -30,6 +30,9 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
   const [engagementMessage, setEngagementMessage] = useState<string | null>(null);
   const [engagementError, setEngagementError] = useState<string | null>(null);
   const [pendingEngagementDraftId, setPendingEngagementDraftId] = useState<string | null>(null);
+  const [outreachMessage, setOutreachMessage] = useState<string | null>(null);
+  const [outreachError, setOutreachError] = useState<string | null>(null);
+  const [pendingOutreachAction, setPendingOutreachAction] = useState<string | null>(null);
 
   function handleEngagement(draftId: string, eventType: "OPEN" | "CLICK" | "ASSET_VIEW" | "REPLY") {
     setPendingEngagementDraftId(draftId);
@@ -63,6 +66,42 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
       })
       .finally(() => {
         setPendingEngagementDraftId(null);
+      });
+  }
+
+  function handleOutreachAction(
+    key: string,
+    path: string,
+    successMessage: string,
+    body?: Record<string, unknown>,
+  ) {
+    setPendingOutreachAction(key);
+    setOutreachMessage(null);
+    setOutreachError(null);
+
+    void fetch(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body ?? {}),
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Outreach action failed.");
+        }
+
+        setOutreachMessage(successMessage);
+        router.refresh();
+      })
+      .catch((cause) => {
+        setOutreachError(
+          cause instanceof Error ? cause.message : "Outreach action failed.",
+        );
+      })
+      .finally(() => {
+        setPendingOutreachAction(null);
       });
   }
 
@@ -331,28 +370,136 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             )}
             {lead.diagnosticForms.length > 0 ? (
               lead.diagnosticForms.map((form) => (
-                <DetailCard
+                <article
                   key={form.id}
-                  body={`${form.outreachCtaShort} Estimated completion time: ${form.estimatedCompletionTime}.${form.googleFormUrl ? ` Google Form: ${form.googleFormUrl}.` : ""} Response status: ${form.responseStatus}.`}
-                  label={form.industry}
-                  title={form.formTitle}
-                />
+                  className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                >
+                  <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                    {form.industry}
+                  </p>
+                  <h2 className="mt-3 font-display text-2xl text-cream">{form.formTitle}</h2>
+                  <p className="mt-3 text-sm leading-7 text-[rgba(245,235,212,0.72)]">
+                    {form.outreachCtaShort} Estimated completion time: {form.estimatedCompletionTime}. Response status:{" "}
+                    {form.responseStatus}.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {form.googleFormUrl ? (
+                      <Link
+                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream"
+                        href={form.googleFormUrl}
+                        target="_blank"
+                      >
+                        Open Google Form
+                      </Link>
+                    ) : (
+                      <button
+                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                        disabled={pendingOutreachAction === `form:${form.id}`}
+                        onClick={() =>
+                          handleOutreachAction(
+                            `form:${form.id}`,
+                            `/api/leads/${lead.company.id}/diagnostic-form-link`,
+                            "Live Google Form created.",
+                            { createLiveForm: true },
+                          )
+                        }
+                        type="button"
+                      >
+                        Create live Google Form
+                      </button>
+                    )}
+                  </div>
+                </article>
               ))
             ) : (
               <EmptyPanel message="No diagnostic form generated yet." />
             )}
             {lead.outreachDrafts.length > 0 ? (
               lead.outreachDrafts.map((draft) => (
-                <DetailCard
+                <article
                   key={draft.id}
-                  body={`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\n${draft.assetPath ? `Hosted asset: ${draft.assetPath}\n\n` : ""}${draft.diagnosticFormUrl ? `Diagnostic form: ${draft.diagnosticFormUrl}\n\n` : ""}Follow-up: ${draft.followUp1}\n\nSequence: ${draft.sequenceStep} • ${draft.draftType.replaceAll("_", " ")}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
-                  label={`${draft.emailSubject2} • ${draft.approvalStatus.replaceAll("_", " ")}`}
-                  title={draft.emailSubject1}
-                />
+                  className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                >
+                  <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                    {draft.emailSubject2} • {draft.approvalStatus.replaceAll("_", " ")}
+                  </p>
+                  <h2 className="mt-3 font-display text-2xl text-cream">{draft.emailSubject1}</h2>
+                  <p className="mt-3 text-sm leading-7 text-[rgba(245,235,212,0.72)] whitespace-pre-line">
+                    {`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\n${draft.assetPath ? `Hosted asset: ${draft.assetPath}\n\n` : ""}${draft.diagnosticFormUrl ? `Diagnostic form: ${draft.diagnosticFormUrl}\n\n` : ""}Follow-up: ${draft.followUp1}\n\nSequence: ${draft.sequenceStep} • ${draft.draftType.replaceAll("_", " ")}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {draft.approvalStatus === "APPROVED" ? (
+                      <>
+                        <button
+                          className="rounded-full bg-cream px-4 py-2 text-sm font-semibold text-[#120f0c] disabled:opacity-60"
+                          disabled={pendingOutreachAction === `gmail:${draft.id}`}
+                          onClick={() =>
+                            handleOutreachAction(
+                              `gmail:${draft.id}`,
+                              `/api/outreach-drafts/${draft.id}/create-gmail-draft`,
+                              "Gmail draft created or refreshed.",
+                            )
+                          }
+                          type="button"
+                        >
+                          {draft.gmailSyncStatus === "SYNCED" ? "Refresh Gmail draft" : "Create Gmail draft"}
+                        </button>
+                        <button
+                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          disabled={pendingOutreachAction === `sheets:${draft.id}`}
+                          onClick={() =>
+                            handleOutreachAction(
+                              `sheets:${draft.id}`,
+                              `/api/outreach-drafts/${draft.id}/sync-google-sheet`,
+                              "Google Sheets ledger updated.",
+                            )
+                          }
+                          type="button"
+                        >
+                          Sync to Sheets
+                        </button>
+                        <button
+                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          disabled={
+                            pendingOutreachAction === `thread:${draft.id}` ||
+                            draft.gmailSyncStatus !== "SYNCED" ||
+                            !draft.gmailThreadId
+                          }
+                          onClick={() =>
+                            handleOutreachAction(
+                              `thread:${draft.id}`,
+                              `/api/outreach-drafts/${draft.id}/refresh-gmail-thread`,
+                              "Gmail thread refreshed.",
+                            )
+                          }
+                          type="button"
+                        >
+                          Refresh Gmail replies
+                        </button>
+                        <button
+                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          disabled={pendingOutreachAction === `hubspot:${draft.id}`}
+                          onClick={() =>
+                            handleOutreachAction(
+                              `hubspot:${draft.id}`,
+                              `/api/outreach-drafts/${draft.id}/sync-hubspot`,
+                              "HubSpot mirror updated.",
+                            )
+                          }
+                          type="button"
+                        >
+                          Sync HubSpot
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </article>
               ))
             ) : (
               <EmptyPanel message="No outreach drafts generated yet." />
             )}
+            {outreachMessage ? <p className="text-sm text-[#c8e2c0]">{outreachMessage}</p> : null}
+            {outreachError ? <p className="text-sm text-[#f1b08f]">{outreachError}</p> : null}
             {lead.outreachDrafts.some((draft) => draft.assetPath) ? (
               <div className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5">
                 <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">

@@ -4,16 +4,22 @@ import Link from "next/link";
 import { startTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { type ApprovalQueueItem, type ApprovalQueueSummary } from "@/lib/leads/view-models";
+import {
+  type ApprovalQueueItem,
+  type ApprovalQueueSummary,
+  type CampaignAnalytics,
+} from "@/lib/leads/view-models";
 
 export function ApprovalQueue({
   summary,
   items,
   workspaceConnected,
+  campaignAnalytics,
 }: {
   summary: ApprovalQueueSummary;
   items: ApprovalQueueItem[];
   workspaceConnected: boolean;
+  campaignAnalytics?: CampaignAnalytics;
 }) {
   const router = useRouter();
   const [pendingDraftId, setPendingDraftId] = useState<string | null>(null);
@@ -22,7 +28,13 @@ export function ApprovalQueue({
 
   function handleAction(
     draftId: string,
-    action: "approve" | "reject" | "create-gmail-draft" | "sync-google-sheet",
+    action:
+      | "approve"
+      | "reject"
+      | "create-gmail-draft"
+      | "sync-google-sheet"
+      | "refresh-gmail-thread"
+      | "sync-hubspot",
   ) {
     setPendingDraftId(draftId);
     setMessage(null);
@@ -48,6 +60,8 @@ export function ApprovalQueue({
           reject: "Draft rejected.",
           "create-gmail-draft": "Gmail draft created.",
           "sync-google-sheet": "Draft synced to Google Sheets.",
+          "refresh-gmail-thread": "Gmail thread refreshed.",
+          "sync-hubspot": "HubSpot mirror updated.",
         } as const;
 
         setMessage(nextMessage[action]);
@@ -79,6 +93,16 @@ export function ApprovalQueue({
           </div>
         </div>
 
+        {campaignAnalytics ? (
+          <div className="grid gap-3 md:grid-cols-5">
+            <AnalyticsBadge label="Sent" value={campaignAnalytics.sentCount} />
+            <AnalyticsBadge label="Viewed" value={campaignAnalytics.viewedCount} />
+            <AnalyticsBadge label="Replied" value={campaignAnalytics.repliedCount} />
+            <AnalyticsBadge label="Follow-up due" value={campaignAnalytics.followUpDueCount} />
+            <AnalyticsBadge label="Suppressed" value={campaignAnalytics.suppressedCount} />
+          </div>
+        ) : null}
+
         {items.length === 0 ? (
           <div className="rounded-[1.5rem] border border-dashed border-[rgba(210,180,140,0.18)] p-5 text-sm text-[rgba(245,235,212,0.68)]">
             No generated drafts are waiting for review yet.
@@ -107,6 +131,11 @@ export function ApprovalQueue({
                       <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1 text-[rgba(245,235,212,0.72)]">
                         Sheets {item.sheetSyncStatus.toLowerCase().replaceAll("_", " ")}
                       </span>
+                      {item.suppressionReason ? (
+                        <span className="rounded-full border border-[rgba(194,126,82,0.2)] px-3 py-1 text-[#f1b08f]">
+                          {item.suppressionReason.replaceAll("_", " ")}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -161,6 +190,26 @@ export function ApprovalQueue({
                       >
                         {item.sheetSyncStatus === "SYNCED" ? "Sheets synced" : "Sync to Sheets"}
                       </button>
+                      <button
+                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        disabled={
+                          pendingDraftId === item.draftId ||
+                          item.gmailSyncStatus !== "SYNCED" ||
+                          item.draftId.startsWith("suppressed:")
+                        }
+                        onClick={() => handleAction(item.draftId, "refresh-gmail-thread")}
+                        type="button"
+                      >
+                        Refresh replies
+                      </button>
+                      <button
+                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        disabled={pendingDraftId === item.draftId || item.draftId.startsWith("suppressed:")}
+                        onClick={() => handleAction(item.draftId, "sync-hubspot")}
+                        type="button"
+                      >
+                        Sync HubSpot
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -180,6 +229,15 @@ function QueueBadge({ label, value }: { label: string; value: number }) {
     <div className="rounded-[1rem] border border-[rgba(210,180,140,0.12)] px-4 py-3">
       <p className="font-serif text-[11px] uppercase tracking-[0.2em] text-tan">{label}</p>
       <p className="mt-2 font-display text-2xl text-cream">{value}</p>
+    </div>
+  );
+}
+
+function AnalyticsBadge({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[1.25rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
+      <p className="font-serif text-[11px] uppercase tracking-[0.2em] text-tan">{label}</p>
+      <p className="mt-2 font-display text-xl text-cream">{value}</p>
     </div>
   );
 }

@@ -20,6 +20,14 @@ export type ApprovalQueueSummary = {
   syncedDraftCount: number;
 };
 
+export type CampaignAnalytics = {
+  sentCount: number;
+  viewedCount: number;
+  repliedCount: number;
+  followUpDueCount: number;
+  suppressedCount: number;
+};
+
 export type GoogleWorkspaceStatusViewModel = {
   status: "CONFIG_INCOMPLETE" | "DISCONNECTED" | "ERROR" | "CONNECTED";
   canStartOAuth: boolean;
@@ -37,6 +45,7 @@ export type ApprovalQueueItem = {
   approvalStatus: string;
   gmailSyncStatus: string;
   sheetSyncStatus: string;
+  suppressionReason?: string | null;
 };
 
 export type LeadDetailViewModel = {
@@ -113,9 +122,11 @@ export type LeadDetailViewModel = {
     sequenceStep: number;
     approvalStatus: string;
     gmailSyncStatus: string;
+    gmailThreadId?: string;
     sheetSyncStatus: string;
     assetPath?: string;
     diagnosticFormUrl?: string;
+    contactEmail?: string;
   }>;
   engagementEvents: Array<{
     id: string;

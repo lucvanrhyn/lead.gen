@@ -282,6 +282,58 @@ describe("ApprovalQueue", () => {
 
     expect(screen.getByRole("button", { name: /create gmail draft/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sync to sheets/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh replies/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sync hubspot/i })).toBeInTheDocument();
+  });
+
+  it("shows campaign analytics and suppression reasons when provided", () => {
+    render(
+      <ApprovalQueue
+        items={[
+          {
+            draftId: "outreach-1",
+            leadId: "lead-1",
+            companyName: "Atlas Dental Group",
+            contactName: "Megan Jacobs",
+            emailSubject: "A quick idea for Atlas Dental bookings",
+            approvalStatus: "PENDING_APPROVAL",
+            gmailSyncStatus: "NOT_READY",
+            sheetSyncStatus: "NOT_READY",
+            suppressionReason: "duplicate_contact",
+          },
+        ]}
+        summary={{
+          pendingApprovalCount: 1,
+          approvedCount: 0,
+          syncedDraftCount: 0,
+        }}
+        workspaceConnected={false}
+        campaignAnalytics={{
+          sentCount: 2,
+          viewedCount: 1,
+          repliedCount: 1,
+          followUpDueCount: 1,
+          suppressedCount: 1,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText((_, element) => (element?.textContent ?? "").replaceAll(/\s+/g, "") === "Sent2"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => (element?.textContent ?? "").replaceAll(/\s+/g, "") === "Viewed1"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => (element?.textContent ?? "").replaceAll(/\s+/g, "") === "Replied1"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => (element?.textContent ?? "").replaceAll(/\s+/g, "") === "Follow-updue1"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_, element) => (element?.textContent ?? "").replaceAll(/\s+/g, "") === "Suppressed1"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/duplicate contact/i)).toBeInTheDocument();
   });
 });
 

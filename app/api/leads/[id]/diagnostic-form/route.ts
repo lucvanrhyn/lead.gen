@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { buildDiagnosticFormBlueprint, persistDiagnosticFormBlueprint } from "@/lib/ai/diagnostic-form";
 import { db } from "@/lib/db";
+import { createLiveDiagnosticFormLink } from "@/lib/domain/diagnostic-form-links";
 
 export async function POST(
   _request: Request,
@@ -38,9 +39,20 @@ export async function POST(
     painHypothesisId: latestPain.id,
     blueprint,
   });
+  const liveForm = await createLiveDiagnosticFormLink({
+    blueprintId: persisted.id,
+    blueprint,
+  });
 
   return NextResponse.json({
     id: persisted.id,
     ...blueprint,
+    ...(liveForm
+      ? {
+          googleFormUrl: liveForm.responderUrl,
+          editUrl: liveForm.editUrl,
+          formId: liveForm.formId,
+        }
+      : {}),
   });
 }

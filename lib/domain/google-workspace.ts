@@ -3,6 +3,8 @@ import { WorkspaceConnectionStatus } from "@prisma/client";
 export const GOOGLE_WORKSPACE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/forms.body",
+  "https://www.googleapis.com/auth/drive.file",
 ] as const;
 
 export function getGoogleWorkspaceEnvState(env: NodeJS.ProcessEnv = process.env) {
@@ -88,7 +90,8 @@ export function getGoogleWorkspaceStatusCopy(
     case "CONNECTED":
       return {
         title: "Google Workspace connected",
-        description: "Approved drafts can now create Gmail drafts and sync to your operator sheet.",
+        description:
+          "Approved drafts can now create Gmail drafts, sync to your operator sheet, and create live Google Forms.",
       };
   }
 }

@@ -1,3 +1,5 @@
+import { ApprovalStatus, ExternalSyncStatus } from "@prisma/client";
+import { buildCampaignAnalytics } from "@/lib/ai/outreach";
 import { db } from "@/lib/db";
 import {
   deriveGoogleWorkspaceState,
@@ -8,6 +10,7 @@ import { deriveApprovalQueueSummary } from "@/lib/domain/outreach-ops";
 import {
   type ApprovalQueueItem,
   type ApprovalQueueSummary,
+  type CampaignAnalytics,
   type GoogleWorkspaceStatusViewModel,
   type LeadDetailViewModel,
   type LeadTableRow,
@@ -73,32 +76,54 @@ export async function getLeadSummaries(): Promise<LeadTableRow[]> {
 export async function getApprovalQueue(): Promise<{
   summary: ApprovalQueueSummary;
   items: ApprovalQueueItem[];
+  campaignAnalytics: CampaignAnalytics;
 }> {
   try {
-    const drafts = await db.outreachDraft.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        company: {
-          select: {
-            id: true,
-            name: true,
+    const [drafts, engagementEvents, outreachJobs] = await Promise.all([
+      db.outreachDraft.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          company: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          contact: {
+            select: {
+              fullName: true,
+            },
+          },
+          gmailDraftLink: true,
+          sheetSyncRecords: {
+            where: { tabName: "Drafts" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
           },
         },
-        contact: {
-          select: {
-            fullName: true,
+      }),
+      db.outreachEngagementEvent.findMany({
+        select: {
+          id: true,
+          outreachDraftId: true,
+          eventType: true,
+        },
+      }),
+      db.enrichmentJob.findMany({
+        where: { stage: "OUTREACH_GENERATION" },
+        orderBy: { createdAt: "desc" },
+        include: {
+          company: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        gmailDraftLink: true,
-        sheetSyncRecords: {
-          where: { tabName: "Drafts" },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-      },
-    });
+      }),
+    ]);
 
-    const items = drafts.map((draft) => ({
+    const items: ApprovalQueueItem[] = drafts.map((draft) => ({
       draftId: draft.id,
       leadId: draft.company.id,
       companyName: draft.company.name,
@@ -108,16 +133,72 @@ export async function getApprovalQueue(): Promise<{
       gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
       sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
     }));
+    const latestJobByCompany = new Map<string, (typeof outreachJobs)[number]>();
+
+    for (const job of outreachJobs) {
+      if (!job.companyId || latestJobByCompany.has(job.companyId)) {
+        continue;
+      }
+
+      latestJobByCompany.set(job.companyId, job);
+    }
+
+    for (const job of latestJobByCompany.values()) {
+      if (!job.company) {
+        continue;
+      }
+
+      const summary = toRecord(job.resultSummary);
+      const suppressedContacts = Array.isArray(summary?.suppressedContacts)
+        ? summary.suppressedContacts
+        : [];
+
+      for (const [index, suppressedContact] of suppressedContacts.entries()) {
+        const contact = toRecord(suppressedContact);
+
+        items.push({
+          draftId: `suppressed:${job.company.id}:${contact?.contactId ?? index}`,
+          leadId: job.company.id,
+          companyName: job.company.name,
+          contactName:
+            typeof contact?.contactName === "string" ? contact.contactName : undefined,
+          emailSubject: "Suppressed outreach",
+          approvalStatus: "SUPPRESSED",
+          gmailSyncStatus: "NOT_READY",
+          sheetSyncStatus: "NOT_READY",
+          suppressionReason:
+            typeof contact?.reason === "string" ? contact.reason : "suppressed",
+        });
+      }
+    }
+
+    const campaignAnalytics = buildCampaignAnalytics({
+      drafts: items.map((item) => ({
+        id: item.draftId,
+        companyId: item.leadId,
+        approvalStatus:
+          item.approvalStatus === "SUPPRESSED"
+            ? ApprovalStatus.PENDING_APPROVAL
+            : (item.approvalStatus as ApprovalStatus),
+        gmailSyncStatus: item.gmailSyncStatus as ExternalSyncStatus,
+        suppressionReason: toSuppressionReason(item.suppressionReason),
+      })),
+      engagementEvents,
+    });
 
     return {
       summary: deriveApprovalQueueSummary(
         items.map((item) => ({
-          approvalStatus: item.approvalStatus,
-          gmailSyncStatus: item.gmailSyncStatus,
-          sheetSyncStatus: item.sheetSyncStatus,
+          approvalStatus:
+            item.approvalStatus === "SUPPRESSED"
+              ? ApprovalStatus.PENDING_APPROVAL
+              : (item.approvalStatus as ApprovalStatus),
+          gmailSyncStatus: item.gmailSyncStatus as ExternalSyncStatus,
+          sheetSyncStatus: item.sheetSyncStatus as ExternalSyncStatus,
         })),
       ),
       items,
+      campaignAnalytics,
     };
   } catch {
     return {
@@ -127,6 +208,13 @@ export async function getApprovalQueue(): Promise<{
         syncedDraftCount: 0,
       },
       items: [],
+      campaignAnalytics: {
+        sentCount: 0,
+        viewedCount: 0,
+        repliedCount: 0,
+        followUpDueCount: 0,
+        suppressedCount: 0,
+      },
     };
   }
 }
@@ -195,6 +283,11 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         outreachDrafts: {
           orderBy: { createdAt: "desc" },
           include: {
+            contact: {
+              select: {
+                email: true,
+              },
+            },
             gmailDraftLink: true,
             leadMagnetAsset: true,
             sheetSyncRecords: {
@@ -299,11 +392,13 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         sequenceStep: draft.sequenceStep,
         approvalStatus: draft.approvalStatus,
         gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
+        gmailThreadId: draft.gmailDraftLink?.gmailThreadId ?? undefined,
         sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
         assetPath: draft.leadMagnetAsset?.slug
           ? `/assets/${draft.leadMagnetAsset.slug}`
           : undefined,
         diagnosticFormUrl: draft.leadMagnetAsset?.diagnosticFormUrl ?? undefined,
+        contactEmail: draft.contact?.email ?? undefined,
       })),
       engagementEvents: company.engagementEvents.map((event) => ({
         id: event.id,
@@ -334,5 +429,24 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
     };
   } catch {
     return null;
+  }
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function toSuppressionReason(value: string | null | undefined) {
+  switch (value) {
+    case "duplicate_contact":
+    case "company_cooldown":
+    case "active_engagement":
+      return value;
+    default:
+      return null;
   }
 }

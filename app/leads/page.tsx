@@ -48,6 +48,7 @@ export default async function LeadsPage() {
           items={approvalQueue.items}
           summary={approvalQueue.summary}
           workspaceConnected={workspace.status === "CONNECTED"}
+          campaignAnalytics={approvalQueue.campaignAnalytics}
         />
         <LeadTable leads={leads} />
       </div>

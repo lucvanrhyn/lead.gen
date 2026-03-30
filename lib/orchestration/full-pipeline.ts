@@ -1,11 +1,18 @@
-import { JobStatus } from "@prisma/client";
+import { ApprovalStatus, EnrichmentStage, ExternalSyncStatus, JobStatus, SourceProvider } from "@prisma/client";
 
 import { buildDiagnosticFormBlueprint, persistDiagnosticFormBlueprint } from "@/lib/ai/diagnostic-form";
 import { buildLeadMagnet, persistLeadMagnet } from "@/lib/ai/lead-magnet";
-import { buildOutreachDraft, persistOutreachDraft } from "@/lib/ai/outreach";
+import {
+  buildCampaignAnalytics,
+  buildOutreachDraft,
+  evaluateOutreachSuppression,
+  persistOutreachDraft,
+  type OutreachSuppressionReason,
+} from "@/lib/ai/outreach";
 import { generatePainHypothesis, persistPainHypothesis } from "@/lib/ai/pain-hypothesis";
 import { persistLeadScore, scoreLeadContext } from "@/lib/ai/lead-score";
 import { db } from "@/lib/db";
+import { createLiveDiagnosticFormLink } from "@/lib/domain/diagnostic-form-links";
 import { enrichApolloCompanyAndContacts } from "@/lib/providers/apollo/client";
 import { extractLeadWebsitePages } from "@/lib/providers/firecrawl/client";
 
@@ -31,6 +38,15 @@ export async function runCompanyFullPipeline(companyId: string) {
         painHypotheses: {
           orderBy: { createdAt: "desc" },
           take: 1,
+        },
+        outreachDrafts: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            gmailDraftLink: true,
+          },
+        },
+        engagementEvents: {
+          orderBy: { occurredAt: "desc" },
         },
       },
     });
@@ -80,6 +96,15 @@ export async function runCompanyFullPipeline(companyId: string) {
         },
         technologyProfiles: true,
         newsMentions: true,
+        outreachDrafts: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            gmailDraftLink: true,
+          },
+        },
+        engagementEvents: {
+          orderBy: { occurredAt: "desc" },
+        },
       },
     });
 
@@ -123,6 +148,15 @@ export async function runCompanyFullPipeline(companyId: string) {
         },
         technologyProfiles: true,
         newsMentions: true,
+        outreachDrafts: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            gmailDraftLink: true,
+          },
+        },
+        engagementEvents: {
+          orderBy: { occurredAt: "desc" },
+        },
       },
     });
 
@@ -190,16 +224,60 @@ export async function runCompanyFullPipeline(companyId: string) {
       primaryPain: painHypothesis.primary_pain,
       serviceAngle: painHypothesis.recommended_service_angle,
     });
-    await persistDiagnosticFormBlueprint({
+    const persistedDiagnosticForm = await persistDiagnosticFormBlueprint({
       companyId,
       painHypothesisId: persistedPain?.id,
       blueprint: diagnosticForm,
     });
-    stages.push({ stage: "diagnostic-form", status: JobStatus.SUCCEEDED });
+    let diagnosticFormUrl: string | null = null;
+    let diagnosticFormStatus: JobStatus = JobStatus.SUCCEEDED;
+    let diagnosticFormError: string | undefined;
+
+    try {
+      const liveForm = await createLiveDiagnosticFormLink({
+        blueprintId: persistedDiagnosticForm.id,
+        blueprint: diagnosticForm,
+      });
+      diagnosticFormUrl = liveForm?.responderUrl ?? null;
+    } catch (error) {
+      diagnosticFormStatus = JobStatus.PARTIAL;
+      diagnosticFormError =
+        error instanceof Error ? error.message : "Creating the live diagnostic form failed.";
+    }
+
+    stages.push({
+      stage: "diagnostic-form",
+      status: diagnosticFormStatus,
+      error: diagnosticFormError,
+    });
 
     const contacts = companyWithEvidence.contacts.filter((contact) => Boolean(contact.email));
 
     if (contacts.length === 0) {
+      await db.enrichmentJob.create({
+        data: {
+          companyId,
+          provider: SourceProvider.SYSTEM,
+          stage: EnrichmentStage.OUTREACH_GENERATION,
+          status: JobStatus.PARTIAL,
+          attempts: 1,
+          requestedBy: "orchestration.full-pipeline",
+          resultSummary: {
+            campaignAnalytics: {
+              sentCount: 0,
+              viewedCount: 0,
+              repliedCount: 0,
+              followUpDueCount: 0,
+              suppressedCount: 0,
+            },
+            suppressedContacts: [],
+            generatedDraftCount: 0,
+            suppressedContactCount: 0,
+            note: "No valid contacts with email were available for draft generation.",
+          },
+        },
+      });
+
       stages.push({
         stage: "outreach",
         status: JobStatus.PARTIAL,
@@ -212,7 +290,69 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
+    const campaignDrafts: Array<{
+      id: string;
+      companyId: string;
+      approvalStatus: ApprovalStatus;
+      gmailSyncStatus: ExternalSyncStatus;
+      suppressionReason: OutreachSuppressionReason | null;
+    }> = companyWithEvidence.outreachDrafts.map((draft) => ({
+      id: draft.id,
+      companyId: draft.companyId,
+      approvalStatus: draft.approvalStatus,
+      gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? ExternalSyncStatus.NOT_READY,
+      suppressionReason: null,
+    }));
+    const suppressedContacts: Array<{
+      contactId: string;
+      contactName: string | null;
+      contactEmail: string | null;
+      reason: OutreachSuppressionReason | null;
+      note?: string;
+      cooldownUntil?: string;
+    }> = [];
+    let suppressedContactCount = 0;
+
     for (const contact of contacts) {
+      const suppression = evaluateOutreachSuppression({
+        companyId: companyWithEvidence.id,
+        contactId: contact.id,
+        recentDrafts: companyWithEvidence.outreachDrafts.map((draft) => ({
+          id: draft.id,
+          companyId: draft.companyId,
+          contactId: draft.contactId,
+          createdAt: draft.createdAt,
+          approvalStatus: draft.approvalStatus,
+          gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? ExternalSyncStatus.NOT_READY,
+        })),
+        engagementEvents: companyWithEvidence.engagementEvents.map((event) => ({
+          id: event.id,
+          outreachDraftId: event.outreachDraftId,
+          eventType: event.eventType,
+          occurredAt: event.occurredAt,
+        })),
+      });
+
+      if (suppression.suppressed) {
+        suppressedContactCount += 1;
+        suppressedContacts.push({
+          contactId: contact.id,
+          contactName: contact.fullName,
+          contactEmail: contact.email,
+          reason: suppression.reason ?? null,
+          note: suppression.note,
+          cooldownUntil: suppression.cooldownUntil?.toISOString(),
+        });
+        campaignDrafts.push({
+          id: `suppressed-${contact.id}`,
+          companyId: companyWithEvidence.id,
+          approvalStatus: "PENDING_APPROVAL",
+          gmailSyncStatus: ExternalSyncStatus.NOT_READY,
+          suppressionReason: suppression.reason ?? null,
+        });
+        continue;
+      }
+
       const outreach = buildOutreachDraft({
         companyName: companyWithEvidence.name,
         contactName: contact.firstName ?? contact.fullName ?? undefined,
@@ -237,20 +377,66 @@ export async function runCompanyFullPipeline(companyId: string) {
           suggestedDeliveryFormat: persistedLeadMagnet.suggestedDeliveryFormat,
         },
         outreach,
+        diagnosticFormUrl,
         contact: {
           id: contact.id,
           fullName: contact.fullName,
           title: "title" in contact ? contact.title : undefined,
         },
       });
+
+      campaignDrafts.push({
+        id: `generated-${contact.id}`,
+        companyId: companyWithEvidence.id,
+        approvalStatus: "PENDING_APPROVAL",
+        gmailSyncStatus: ExternalSyncStatus.NOT_READY,
+        suppressionReason: null,
+      });
     }
-    stages.push({ stage: "outreach", status: JobStatus.SUCCEEDED });
+    const campaignAnalytics = buildCampaignAnalytics({
+      drafts: campaignDrafts,
+      engagementEvents: companyWithEvidence.engagementEvents.map((event) => ({
+        id: event.id,
+        outreachDraftId: event.outreachDraftId,
+        eventType: event.eventType,
+      })),
+    });
+    const outreachStatus = suppressedContactCount > 0 ? JobStatus.PARTIAL : JobStatus.SUCCEEDED;
+
+    await db.enrichmentJob.create({
+      data: {
+        companyId,
+        provider: SourceProvider.SYSTEM,
+        stage: EnrichmentStage.OUTREACH_GENERATION,
+        status: outreachStatus,
+        attempts: 1,
+        requestedBy: "orchestration.full-pipeline",
+        resultSummary: {
+          campaignAnalytics,
+          suppressedContacts,
+          generatedDraftCount: contacts.length - suppressedContactCount,
+          suppressedContactCount,
+        },
+      },
+    });
+
+    stages.push({
+      stage: "outreach",
+      status: outreachStatus,
+      error:
+        suppressedContactCount > 0
+          ? `${suppressedContactCount} contact${suppressedContactCount === 1 ? "" : "s"} suppressed.`
+          : undefined,
+    });
 
     return {
       status: stages.some((stage) => stage.status === JobStatus.FAILED)
         ? JobStatus.PARTIAL
-        : JobStatus.SUCCEEDED,
+        : stages.some((stage) => stage.status === JobStatus.PARTIAL)
+          ? JobStatus.PARTIAL
+          : JobStatus.SUCCEEDED,
       stages,
+      campaignAnalytics,
     };
   } catch (error) {
     return {

@@ -2,6 +2,22 @@ import { EnrichmentStage, JobStatus, SourceProvider } from "@prisma/client";
 import { z } from "zod";
 
 import { persistLeadMagnetAsset } from "@/lib/ai/lead-magnet";
+import {
+  deriveOutreachSuppressionReason,
+  summarizeCampaignAnalytics,
+  type CampaignAnalytics,
+  type CampaignAnalyticsInput,
+  type OutreachSuppressionInput,
+  type OutreachSuppressionResult,
+} from "@/lib/domain/outreach-analytics";
+
+export type {
+  CampaignAnalytics,
+  CampaignAnalyticsInput,
+  OutreachSuppressionInput,
+  OutreachSuppressionResult,
+  OutreachSuppressionReason,
+} from "@/lib/domain/outreach-analytics";
 
 export const outreachSchema = z.object({
   email_subject_1: z.string(),
@@ -146,6 +162,14 @@ export function buildFollowUpDraft(input: {
     follow_up_2: `Happy to send the short version if it would help.`,
     follow_up_reason: "open_only",
   });
+}
+
+export function evaluateOutreachSuppression(input: OutreachSuppressionInput): OutreachSuppressionResult {
+  return deriveOutreachSuppressionReason(input);
+}
+
+export function buildCampaignAnalytics(input: CampaignAnalyticsInput): CampaignAnalytics {
+  return summarizeCampaignAnalytics(input);
 }
 
 export async function persistOutreachDraft(

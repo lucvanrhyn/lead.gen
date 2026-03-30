@@ -6,9 +6,12 @@ import { diagnosticFormResponseSummarySchema } from "@/lib/ai/diagnostic-form";
 import { persistLeadScore, scoreLeadContext } from "@/lib/ai/lead-score";
 import { db } from "@/lib/db";
 import { deriveDiagnosticResponseStatus } from "@/lib/domain/diagnostic-forms";
+import type { DiagnosticFormBlueprint } from "@/lib/domain/diagnostic-forms";
+import { createLiveDiagnosticFormLink } from "@/lib/domain/diagnostic-form-links";
 
 const formLinkRequestSchema = z.object({
   url: z.string().url().optional(),
+  createLiveForm: z.boolean().optional(),
   responseStatus: z.nativeEnum(DiagnosticFormResponseStatus).optional(),
   responseSummary: diagnosticFormResponseSummarySchema.optional(),
 });
@@ -34,9 +37,59 @@ export async function POST(
       );
     }
 
+    let liveFormUrl = input.url ?? latestBlueprint.formLink?.url ?? null;
+    let liveFormMetadata:
+      | {
+          formId: string;
+          responderUrl: string;
+          editUrl: string;
+        }
+      | null = null;
+
+    if (input.createLiveForm) {
+      const blueprint = {
+        form_title: latestBlueprint.formTitle,
+        form_intro: latestBlueprint.formIntro,
+        form_sections: latestBlueprint.formSections,
+        closing_message: latestBlueprint.closingMessage,
+        estimated_completion_time: latestBlueprint.estimatedCompletionTime,
+        industry: latestBlueprint.industry,
+        primary_goal: latestBlueprint.primaryGoal,
+        qualification_strength: latestBlueprint.qualificationStrength,
+        outreach_cta_short: latestBlueprint.outreachCtaShort,
+        outreach_cta_medium: latestBlueprint.outreachCtaMedium,
+        usage_mode: "lead_magnet_and_form",
+      } as DiagnosticFormBlueprint;
+
+      const liveForm = await createLiveDiagnosticFormLink({
+        blueprintId: latestBlueprint.id,
+        blueprint,
+      });
+
+      if (!liveForm) {
+        return NextResponse.json(
+          {
+            error:
+              "Connect Google Workspace or provide a manual diagnostic form URL before saving.",
+          },
+          { status: 503 },
+        );
+      }
+
+      liveFormMetadata = liveForm;
+      liveFormUrl = liveForm.responderUrl;
+    } else if (!liveFormUrl) {
+      return NextResponse.json(
+        {
+          error:
+            "Provide a manual diagnostic form URL or request live Google Form creation before saving.",
+        },
+        { status: 400 },
+      );
+    }
+
     const responseStatus =
-      input.responseStatus ??
-      deriveDiagnosticResponseStatus(input.url, input.responseSummary);
+      input.responseStatus ?? deriveDiagnosticResponseStatus(liveFormUrl, input.responseSummary);
 
     let scoreImpact: Prisma.InputJsonValue | undefined;
 
@@ -92,7 +145,7 @@ export async function POST(
       ? await db.diagnosticFormLink.update({
           where: { blueprintId: latestBlueprint.id },
           data: {
-            url: input.url ?? latestBlueprint.formLink.url,
+            url: liveFormUrl ?? latestBlueprint.formLink.url,
             responseStatus,
             responseSummary: input.responseSummary,
             scoreImpact,
@@ -101,14 +154,17 @@ export async function POST(
       : await db.diagnosticFormLink.create({
           data: {
             blueprintId: latestBlueprint.id,
-            url: input.url ?? "https://forms.google.com",
+            url: liveFormUrl ?? "https://forms.google.com",
             responseStatus,
             responseSummary: input.responseSummary,
             scoreImpact,
           },
         });
 
-    return NextResponse.json(formLink);
+    return NextResponse.json({
+      ...formLink,
+      ...(liveFormMetadata ?? {}),
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
