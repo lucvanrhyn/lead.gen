@@ -15,7 +15,8 @@ export default async function LoginPage({
     redirect("/leads");
   }
 
-  const hasError = params.error === "invalid";
+  const hasInvalidCredentialsError = params.error === "invalid";
+  const hasGoogleWorkspaceCallbackError = params.error === "google_workspace_callback";
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-10">
@@ -50,9 +51,15 @@ export default async function LoginPage({
             />
           </label>
 
-          {hasError ? (
+          {hasInvalidCredentialsError ? (
             <p className="text-sm text-[#f1b08f]">
               The email or password did not match the configured operator account.
+            </p>
+          ) : null}
+
+          {hasGoogleWorkspaceCallbackError ? (
+            <p className="text-sm text-[#f1b08f]">
+              Google Workspace sign-in did not complete. Sign in and start the connection again from the dashboard.
             </p>
           ) : null}
 
