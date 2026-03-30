@@ -382,15 +382,47 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                     {form.outreachCtaShort} Estimated completion time: {form.estimatedCompletionTime}. Response status:{" "}
                     {form.responseStatus}.
                   </p>
+                  {form.responseSummary ? (
+                    <div className="mt-4 grid gap-2 text-sm text-[rgba(245,235,212,0.72)]">
+                      {"keyPain" in form.responseSummary && typeof form.responseSummary.keyPain === "string" ? (
+                        <p>Key pain: {form.responseSummary.keyPain}</p>
+                      ) : null}
+                      {"urgencyLevel" in form.responseSummary && typeof form.responseSummary.urgencyLevel === "string" ? (
+                        <p>Urgency: {form.responseSummary.urgencyLevel}</p>
+                      ) : null}
+                      {"budgetReadiness" in form.responseSummary && typeof form.responseSummary.budgetReadiness === "string" ? (
+                        <p>Readiness: {form.responseSummary.budgetReadiness}</p>
+                      ) : null}
+                      {"responseCount" in form.responseSummary && typeof form.responseSummary.responseCount === "number" ? (
+                        <p>Responses captured: {form.responseSummary.responseCount}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-2">
                     {form.googleFormUrl ? (
-                      <Link
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream"
-                        href={form.googleFormUrl}
-                        target="_blank"
-                      >
-                        Open Google Form
-                      </Link>
+                      <>
+                        <Link
+                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream"
+                          href={form.googleFormUrl}
+                          target="_blank"
+                        >
+                          Open Google Form
+                        </Link>
+                        <button
+                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          disabled={pendingOutreachAction === `form-sync:${form.id}`}
+                          onClick={() =>
+                            handleOutreachAction(
+                              `form-sync:${form.id}`,
+                              `/api/leads/${lead.company.id}/diagnostic-form-responses/sync`,
+                              "Google Form responses synced.",
+                            )
+                          }
+                          type="button"
+                        >
+                          Sync responses
+                        </button>
+                      </>
                     ) : (
                       <button
                         className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
@@ -478,7 +510,10 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                         </button>
                         <button
                           className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
-                          disabled={pendingOutreachAction === `hubspot:${draft.id}`}
+                          disabled={
+                            pendingOutreachAction === `hubspot:${draft.id}` ||
+                            draft.gmailSyncStatus !== "SYNCED"
+                          }
                           onClick={() =>
                             handleOutreachAction(
                               `hubspot:${draft.id}`,

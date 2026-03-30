@@ -113,6 +113,9 @@ Once configured:
 - approve an outreach draft
 - use `Create Gmail draft` to push it into Gmail
 - use `Sync to Sheets` to append or update the `Drafts` tab in your configured spreadsheet
+- use `Create live Google Form` and `Sync responses` on a lead to turn diagnostic submissions into lead-score updates
+
+If you connected Google Workspace before the Forms response sync layer was added, reconnect once so Google grants the latest Forms response scope. The app now checks for that scope and will prompt for reconnect if it is missing.
 
 ## Optional HubSpot mirror
 

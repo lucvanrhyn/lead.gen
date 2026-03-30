@@ -4,6 +4,7 @@ export const GOOGLE_WORKSPACE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/forms.body",
+  "https://www.googleapis.com/auth/forms.responses.readonly",
   "https://www.googleapis.com/auth/drive.file",
 ] as const;
 
@@ -27,6 +28,7 @@ export function deriveGoogleWorkspaceState(input: {
     | {
         status: WorkspaceConnectionStatus;
         email?: string | null;
+        scopes?: unknown;
       }
     | null;
 }) {
@@ -61,6 +63,19 @@ export function deriveGoogleWorkspaceState(input: {
     } as const;
   }
 
+  const grantedScopes = Array.isArray(input.connection.scopes)
+    ? input.connection.scopes.filter((scope): scope is string => typeof scope === "string")
+    : [];
+  const hasAllRequiredScopes = GOOGLE_WORKSPACE_SCOPES.every((scope) => grantedScopes.includes(scope));
+
+  if (!hasAllRequiredScopes) {
+    return {
+      status: "ERROR",
+      canStartOAuth: true,
+      connectedEmail: input.connection.email ?? undefined,
+    } as const;
+  }
+
   return {
     status: "CONNECTED",
     canStartOAuth: true,
@@ -85,7 +100,8 @@ export function getGoogleWorkspaceStatusCopy(
     case "ERROR":
       return {
         title: "Google Workspace needs attention",
-        description: "Reconnect Google Workspace to refresh tokens or clear the last connection error.",
+        description:
+          "Reconnect Google Workspace to refresh tokens, grant the latest Gmail and Forms scopes, or clear the last connection error.",
       };
     case "CONNECTED":
       return {

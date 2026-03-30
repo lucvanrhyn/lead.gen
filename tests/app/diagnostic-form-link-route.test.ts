@@ -31,6 +31,11 @@ vi.mock("@/lib/providers/google-workspace/oauth", () => ({
 
 vi.mock("@/lib/providers/google-workspace/forms", () => ({
   createGoogleWorkspaceDiagnosticForm,
+  extractGoogleFormId: (url: string) => {
+    const match = url.match(/\/forms\/d\/([a-zA-Z0-9_-]+)/);
+    return match?.[1] ?? null;
+  },
+  buildGoogleFormEditUrl: (formId: string) => `https://docs.google.com/forms/d/${formId}/edit`,
 }));
 
 describe("diagnostic form link route", () => {
@@ -101,4 +106,58 @@ describe("diagnostic form link route", () => {
     );
     expect(payload.editUrl).toBe("https://docs.google.com/forms/d/form-123/edit");
   });
+
+  it("reuses the existing live Google Form instead of forking a new one", async () => {
+    findBlueprint.mockResolvedValueOnce({
+      id: "blueprint-1",
+      formTitle: "Atlas Dental Workflow Diagnostic",
+      formIntro: "A short diagnostic to pinpoint workflow friction.",
+      closingMessage: "Thanks for filling this in.",
+      estimatedCompletionTime: "2-4 minutes",
+      industry: "Dental Clinics",
+      primaryGoal: "Tighten bookings and follow-up",
+      qualificationStrength: "medium",
+      outreachCtaShort: "Short diagnostic",
+      outreachCtaMedium: "Quick bottleneck form",
+      formSections: [],
+      formLink: {
+        url: "https://docs.google.com/forms/d/form-999/viewform",
+      },
+    });
+    findConnection.mockResolvedValueOnce({
+      provider: "google_workspace",
+      status: "CONNECTED",
+    });
+    findExistingLink.mockResolvedValueOnce({
+      id: "link-1",
+      responseStatus: "LINK_ATTACHED",
+      url: "https://docs.google.com/forms/d/form-999/viewform",
+    });
+    updateLink.mockResolvedValueOnce({
+      id: "link-1",
+      blueprintId: "blueprint-1",
+      url: "https://docs.google.com/forms/d/form-999/viewform",
+      responseStatus: "LINK_ATTACHED",
+    });
+
+    const { POST } = await import("@/app/api/leads/[id]/diagnostic-form-link/route");
+    const response = await POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({ createLiveForm: true }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+      { params: Promise.resolve({ id: "lead-1" }) } as RouteContext<"/api/leads/[id]/diagnostic-form-link">,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(createGoogleWorkspaceDiagnosticForm).not.toHaveBeenCalled();
+    expect(payload.formId).toBe("form-999");
+    expect(payload.editUrl).toBe("https://docs.google.com/forms/d/form-999/edit");
+  });
 });
+
+export {};

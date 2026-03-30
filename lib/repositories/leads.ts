@@ -188,14 +188,16 @@ export async function getApprovalQueue(): Promise<{
 
     return {
       summary: deriveApprovalQueueSummary(
-        items.map((item) => ({
+        items
+          .filter((item) => item.approvalStatus !== "SUPPRESSED")
+          .map((item) => ({
           approvalStatus:
             item.approvalStatus === "SUPPRESSED"
               ? ApprovalStatus.PENDING_APPROVAL
               : (item.approvalStatus as ApprovalStatus),
           gmailSyncStatus: item.gmailSyncStatus as ExternalSyncStatus,
           sheetSyncStatus: item.sheetSyncStatus as ExternalSyncStatus,
-        })),
+          })),
       ),
       items,
       campaignAnalytics,
@@ -226,6 +228,7 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
       select: {
         status: true,
         email: true,
+        scopes: true,
       },
     });
 
@@ -425,6 +428,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         outreachCtaShort: form.outreachCtaShort,
         googleFormUrl: form.formLink?.url ?? undefined,
         responseStatus: form.formLink?.responseStatus ?? "NOT_SHARED",
+        responseSummary: (form.formLink?.responseSummary as Record<string, unknown> | null) ?? undefined,
       })),
     };
   } catch {

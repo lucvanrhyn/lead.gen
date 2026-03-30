@@ -5,6 +5,7 @@ const findConnection = vi.fn();
 const gmailUpsert = vi.fn();
 const findReplyEvent = vi.fn();
 const createReplyEvent = vi.fn();
+const updateManyDrafts = vi.fn();
 const createAuthorizedGoogleClient = vi.fn();
 const fetchGoogleWorkspaceGmailThread = vi.fn();
 
@@ -12,6 +13,7 @@ vi.mock("@/lib/db", () => ({
   db: {
     outreachDraft: {
       findUnique: findDraft,
+      updateMany: updateManyDrafts,
     },
     googleWorkspaceConnection: {
       findUnique: findConnection,
@@ -49,6 +51,11 @@ describe("refresh gmail thread route", () => {
         gmailThreadId: "thread-1",
         syncStatus: "SYNCED",
       },
+      childDrafts: [
+        {
+          id: "follow-up-1",
+        },
+      ],
     });
     findConnection.mockResolvedValueOnce({
       status: "CONNECTED",
@@ -128,6 +135,18 @@ describe("refresh gmail thread route", () => {
         }),
       }),
     );
+    expect(updateManyDrafts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: {
+            in: ["follow-up-1"],
+          },
+        },
+        data: expect.objectContaining({
+          approvalStatus: "REJECTED",
+        }),
+      }),
+    );
     expect(payload.replyEventCreated).toBe(true);
     expect(payload.thread.hasReply).toBe(true);
   });
@@ -142,6 +161,7 @@ describe("refresh gmail thread route", () => {
         gmailThreadId: "thread-1",
         syncStatus: "SYNCED",
       },
+      childDrafts: [],
     });
     findConnection.mockResolvedValueOnce({
       status: "CONNECTED",
@@ -182,6 +202,7 @@ describe("refresh gmail thread route", () => {
     const payload = await response.json();
 
     expect(createReplyEvent).not.toHaveBeenCalled();
+    expect(updateManyDrafts).not.toHaveBeenCalled();
     expect(payload.replyEventCreated).toBe(false);
     expect(payload.thread.hasReply).toBe(false);
   });

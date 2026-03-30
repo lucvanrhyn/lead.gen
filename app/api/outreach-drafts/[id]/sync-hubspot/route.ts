@@ -54,6 +54,11 @@ export async function POST(
             payload: true,
           },
         },
+        gmailDraftLink: {
+          select: {
+            syncStatus: true,
+          },
+        },
       },
     });
 
@@ -64,6 +69,13 @@ export async function POST(
     if (draft.approvalStatus !== "APPROVED") {
       return NextResponse.json(
         { error: "Only approved outreach drafts can sync to HubSpot." },
+        { status: 409 },
+      );
+    }
+
+    if (draft.gmailDraftLink?.syncStatus !== "SYNCED") {
+      return NextResponse.json(
+        { error: "Sync HubSpot only after the draft has been handed off to Gmail." },
         { status: 409 },
       );
     }

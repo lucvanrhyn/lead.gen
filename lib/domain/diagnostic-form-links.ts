@@ -1,7 +1,11 @@
 import { DiagnosticFormResponseStatus, WorkspaceConnectionStatus } from "@prisma/client";
 
 import type { DiagnosticFormBlueprint } from "@/lib/domain/diagnostic-forms";
-import { createGoogleWorkspaceDiagnosticForm } from "@/lib/providers/google-workspace/forms";
+import {
+  buildGoogleFormEditUrl,
+  createGoogleWorkspaceDiagnosticForm,
+  extractGoogleFormId,
+} from "@/lib/providers/google-workspace/forms";
 import { createAuthorizedGoogleClient } from "@/lib/providers/google-workspace/oauth";
 
 export async function createLiveDiagnosticFormLink(input: {
@@ -18,18 +22,30 @@ export async function createLiveDiagnosticFormLink(input: {
     return null;
   }
 
-  const auth = await createAuthorizedGoogleClient(connection);
-  const liveForm = await createGoogleWorkspaceDiagnosticForm({
-    auth,
-    blueprint: input.blueprint,
-  });
-
   const existingLink = await db.diagnosticFormLink.findUnique({
     where: { blueprintId: input.blueprintId },
     select: {
       id: true,
       responseStatus: true,
+      url: true,
     },
+  });
+
+  const existingFormId = existingLink?.url ? extractGoogleFormId(existingLink.url) : null;
+
+  if (existingLink && existingFormId) {
+    return {
+      formId: existingFormId,
+      responderUrl: existingLink.url,
+      editUrl: buildGoogleFormEditUrl(existingFormId),
+      formLink: existingLink,
+    };
+  }
+
+  const auth = await createAuthorizedGoogleClient(connection);
+  const liveForm = await createGoogleWorkspaceDiagnosticForm({
+    auth,
+    blueprint: input.blueprint,
   });
 
   const formLink = existingLink

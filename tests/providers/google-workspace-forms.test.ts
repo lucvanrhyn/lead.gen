@@ -1,7 +1,9 @@
 import {
+  buildDiagnosticResponseSummary,
   buildGoogleFormBatchUpdateRequests,
   buildGoogleFormEditUrl,
   buildGoogleFormResponderUrl,
+  extractGoogleFormId,
 } from "@/lib/providers/google-workspace/forms";
 
 describe("google workspace forms provider", () => {
@@ -61,5 +63,58 @@ describe("google workspace forms provider", () => {
     expect(buildGoogleFormEditUrl("form-123")).toBe(
       "https://docs.google.com/forms/d/form-123/edit",
     );
+  });
+
+  it("extracts the form id from responder and edit URLs", () => {
+    expect(extractGoogleFormId("https://docs.google.com/forms/d/form-123/viewform")).toBe(
+      "form-123",
+    );
+    expect(extractGoogleFormId("https://docs.google.com/forms/d/form-456/edit")).toBe("form-456");
+    expect(extractGoogleFormId("https://example.com/not-a-form")).toBeNull();
+  });
+
+  it("summarizes a latest Google Form response into score-friendly signals", () => {
+    const summary = buildDiagnosticResponseSummary({
+      responseId: "response-1",
+      submittedAt: "2026-03-30T08:00:00.000Z",
+      answers: [
+        {
+          questionId: "question-1",
+          questionText: "Who is filling this in, and what is your role?",
+          values: ["Megan Jacobs - Practice Manager"],
+        },
+        {
+          questionId: "question-2",
+          questionText: "How urgent is this problem for you right now?",
+          values: ["5"],
+        },
+        {
+          questionId: "question-3",
+          questionText:
+            "Are you actively looking for a solution or just assessing options right now?",
+          values: ["Actively looking"],
+        },
+        {
+          questionId: "question-4",
+          questionText: "What tasks are still repetitive or manual for your team?",
+          values: [
+            "We still manually follow up on implant leads, reminders, and quote requests across multiple channels.",
+          ],
+        },
+        {
+          questionId: "question-5",
+          questionText: "If you could fix one bottleneck first, what would it be?",
+          values: ["Lead follow-up leakage after consultation requests."],
+        },
+      ],
+    });
+
+    expect(summary).toMatchObject({
+      urgencyLevel: "HIGH",
+      budgetReadiness: "READY",
+      workflowDetailDepth: "DETAILED",
+      keyPain: "Lead follow-up leakage after consultation requests.",
+      latestResponseId: "response-1",
+    });
   });
 });

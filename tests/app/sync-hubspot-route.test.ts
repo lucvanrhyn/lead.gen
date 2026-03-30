@@ -74,6 +74,9 @@ describe("sync hubspot route", () => {
           payload: { url: "https://example.com/assets/atlas-demo" },
         },
       ],
+      gmailDraftLink: {
+        syncStatus: "SYNCED",
+      },
     });
     syncOutreachDraftToHubSpot.mockResolvedValueOnce({
       mirrored: true,
@@ -125,5 +128,30 @@ describe("sync hubspot route", () => {
       contactCreated: true,
     });
   });
-});
 
+  it("blocks HubSpot sync before the draft is handed off to Gmail", async () => {
+    isHubSpotConfigured.mockReturnValueOnce(true);
+    findDraft.mockResolvedValueOnce({
+      id: "draft-1",
+      approvalStatus: "APPROVED",
+      gmailDraftLink: {
+        syncStatus: "NOT_READY",
+      },
+      company: {
+        id: "company-1",
+        name: "Atlas Dental Group",
+      },
+      engagementEvents: [],
+    });
+
+    const { POST } = await import("@/app/api/outreach-drafts/[id]/sync-hubspot/route");
+    const response = await POST(new Request("http://localhost:3000"), {
+      params: Promise.resolve({ id: "draft-1" }),
+    } as { params: Promise<{ id: string }> });
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toMatch(/handed off to Gmail/i);
+    expect(syncOutreachDraftToHubSpot).not.toHaveBeenCalled();
+  });
+});

@@ -204,7 +204,11 @@ export function ApprovalQueue({
                       </button>
                       <button
                         className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
-                        disabled={pendingDraftId === item.draftId || item.draftId.startsWith("suppressed:")}
+                        disabled={
+                          pendingDraftId === item.draftId ||
+                          item.draftId.startsWith("suppressed:") ||
+                          item.gmailSyncStatus !== "SYNCED"
+                        }
                         onClick={() => handleAction(item.draftId, "sync-hubspot")}
                         type="button"
                       >

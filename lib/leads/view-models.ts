@@ -153,5 +153,6 @@ export type LeadDetailViewModel = {
     outreachCtaShort: string;
     googleFormUrl?: string;
     responseStatus: string;
+    responseSummary?: Record<string, unknown>;
   }>;
 };

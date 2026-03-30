@@ -281,4 +281,9 @@ export const diagnosticFormResponseSummarySchema = z.object({
   budgetReadiness: z.enum(["NOT_READY", "EXPLORING", "READY"]).optional(),
   workflowDetailDepth: z.enum(["LIGHT", "DETAILED"]).optional(),
   keyPain: z.string().optional(),
+  respondentName: z.string().optional(),
+  respondentEmail: z.string().optional(),
+  latestResponseId: z.string().optional(),
+  submittedAt: z.string().optional(),
+  responseCount: z.number().optional(),
 });

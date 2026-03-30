@@ -17,6 +17,17 @@ export async function POST(
       where: { id },
       include: {
         gmailDraftLink: true,
+        childDrafts: {
+          where: {
+            draftType: "FOLLOW_UP",
+            approvalStatus: {
+              in: ["PENDING_APPROVAL", "APPROVED"],
+            },
+          },
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
@@ -107,6 +118,19 @@ export async function POST(
             },
           },
         });
+        if (draft.childDrafts.length > 0) {
+          await db.outreachDraft.updateMany({
+            where: {
+              id: {
+                in: draft.childDrafts.map((childDraft) => childDraft.id),
+              },
+            },
+            data: {
+              approvalStatus: ApprovalStatus.REJECTED,
+              approvalNotes: "Reply detected in Gmail thread.",
+            },
+          });
+        }
         replyEventCreated = true;
       }
     }
