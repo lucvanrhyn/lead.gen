@@ -6,6 +6,7 @@ import { runCompanyFullPipeline } from "@/lib/orchestration/full-pipeline";
 
 const DISCOVERY_QUEUE_REQUESTED_BY = "api.discovery.queue";
 const MAX_DISCOVERY_JOB_ATTEMPTS = 3;
+const DISCOVERY_QUEUE_ADVISORY_LOCK_ID = 4_047_202_630;
 
 type DiscoveryQueuePayload = {
   batchId: string;
@@ -131,91 +132,70 @@ export async function processQueuedDiscoveryJobs(
     runCompanyPipeline?: (companyId: string) => Promise<{ status: JobStatus; error?: string }>;
   },
 ) {
-  const jobs = await claimQueuedDiscoveryJobs(input?.limit ?? 5);
-  const runCompanyPipeline =
-    input?.runCompanyPipeline ??
-    (async (companyId: string) => runCompanyFullPipeline(companyId));
+  const advisoryLock = await db.$queryRaw<Array<{ locked: boolean }>>`
+    SELECT pg_try_advisory_lock(${DISCOVERY_QUEUE_ADVISORY_LOCK_ID}) AS locked
+  `;
+  const lockAcquired = advisoryLock[0]?.locked === true;
 
-  const processed = [];
+  if (!lockAcquired) {
+    return {
+      claimedCount: 0,
+      processed: [],
+      skippedReason: "worker-locked" as const,
+    };
+  }
 
-  for (const job of jobs) {
-    const payload = parseDiscoveryQueuePayload(job.payload);
+  try {
+    const jobs = await claimQueuedDiscoveryJobs(input?.limit ?? 5);
+    const runCompanyPipeline =
+      input?.runCompanyPipeline ??
+      (async (companyId: string) => runCompanyFullPipeline(companyId));
 
-    if (!payload) {
-      await db.enrichmentJob.update({
-        where: { id: job.id },
-        data: {
-          status: JobStatus.FAILED,
-          lastError: "Queue payload was invalid.",
-          runAt: null,
-        },
-      });
-      processed.push({ jobId: job.id, status: JobStatus.FAILED, error: "Queue payload was invalid." });
-      continue;
-    }
+    const processed = [];
 
-    try {
-      const result = await runCompanyPipeline(payload.companyId);
-      const shouldRetry =
-        result.status === JobStatus.FAILED && job.attempts < MAX_DISCOVERY_JOB_ATTEMPTS;
-      const nextRunAt = shouldRetry
-        ? new Date(Date.now() + getRetryDelayMs(job.attempts))
-        : null;
+    for (const job of jobs) {
+      const payload = parseDiscoveryQueuePayload(job.payload);
 
-      await db.enrichmentJob.update({
-        where: { id: job.id },
-        data: {
-          status: result.status,
-          lastError: result.error ?? null,
-          resultSummary: {
-            batchId: payload.batchId,
-            companyId: payload.companyId,
-            retryScheduled: shouldRetry,
-            ...(nextRunAt ? { nextRunAt: nextRunAt.toISOString() } : {}),
+      if (!payload) {
+        await db.enrichmentJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.FAILED,
+            lastError: "Queue payload was invalid.",
+            runAt: null,
           },
-          runAt: nextRunAt,
-        },
-      });
-
-      await db.batchLead.update({
-        where: {
-          batchId_companyId: {
-            batchId: payload.batchId,
-            companyId: payload.companyId,
-          },
-        },
-        data: {
-          status: result.status,
-          lastError: result.error ?? null,
-        },
-      });
-
-      await refreshBatchSummary(payload.batchId);
-      processed.push({
-        jobId: job.id,
-        companyId: payload.companyId,
-        batchId: payload.batchId,
-        status: result.status,
-        retryScheduled: shouldRetry,
-        error: result.error,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Queued discovery job failed.";
-      const shouldRetry = job.attempts < MAX_DISCOVERY_JOB_ATTEMPTS;
-      const nextRunAt = shouldRetry
-        ? new Date(Date.now() + getRetryDelayMs(job.attempts))
-        : null;
-
-      await db.enrichmentJob.update({
-        where: { id: job.id },
-        data: {
+        });
+        processed.push({
+          jobId: job.id,
           status: JobStatus.FAILED,
-          lastError: message,
-          runAt: nextRunAt,
-        },
-      });
+          error: "Queue payload was invalid.",
+        });
+        continue;
+      }
 
-      if (payload) {
+      try {
+        const result = await runCompanyPipeline(payload.companyId);
+        const shouldRetry =
+          result.status === JobStatus.FAILED && job.attempts < MAX_DISCOVERY_JOB_ATTEMPTS;
+        const nextRunAt = shouldRetry
+          ? new Date(Date.now() + getRetryDelayMs(job.attempts))
+          : null;
+
+        await db.enrichmentJob.update({
+          where: { id: job.id },
+          data: {
+            status: result.status,
+            lastError: result.error ?? null,
+            resultSummary: {
+              batchId: payload.batchId,
+              companyId: payload.companyId,
+              retryScheduled: shouldRetry,
+              ...(nextRunAt ? { nextRunAt: nextRunAt.toISOString() } : {}),
+            },
+            runAt: nextRunAt,
+          },
+        });
+
         await db.batchLead.update({
           where: {
             batchId_companyId: {
@@ -224,26 +204,70 @@ export async function processQueuedDiscoveryJobs(
             },
           },
           data: {
-            status: JobStatus.FAILED,
-            lastError: message,
+            status: result.status,
+            lastError: result.error ?? null,
           },
         });
+
         await refreshBatchSummary(payload.batchId);
+        processed.push({
+          jobId: job.id,
+          companyId: payload.companyId,
+          batchId: payload.batchId,
+          status: result.status,
+          retryScheduled: shouldRetry,
+          error: result.error,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Queued discovery job failed.";
+        const shouldRetry = job.attempts < MAX_DISCOVERY_JOB_ATTEMPTS;
+        const nextRunAt = shouldRetry
+          ? new Date(Date.now() + getRetryDelayMs(job.attempts))
+          : null;
+
+        await db.enrichmentJob.update({
+          where: { id: job.id },
+          data: {
+            status: JobStatus.FAILED,
+            lastError: message,
+            runAt: nextRunAt,
+          },
+        });
+
+        if (payload) {
+          await db.batchLead.update({
+            where: {
+              batchId_companyId: {
+                batchId: payload.batchId,
+                companyId: payload.companyId,
+              },
+            },
+            data: {
+              status: JobStatus.FAILED,
+              lastError: message,
+            },
+          });
+          await refreshBatchSummary(payload.batchId);
+        }
+
+        processed.push({
+          jobId: job.id,
+          companyId: payload?.companyId,
+          batchId: payload?.batchId,
+          status: JobStatus.FAILED,
+          retryScheduled: shouldRetry,
+          error: message,
+        });
       }
-
-      processed.push({
-        jobId: job.id,
-        companyId: payload?.companyId,
-        batchId: payload?.batchId,
-        status: JobStatus.FAILED,
-        retryScheduled: shouldRetry,
-        error: message,
-      });
     }
-  }
 
-  return {
-    claimedCount: jobs.length,
-    processed,
-  };
+    return {
+      claimedCount: jobs.length,
+      processed,
+    };
+  } finally {
+    await db.$executeRaw`
+      SELECT pg_advisory_unlock(${DISCOVERY_QUEUE_ADVISORY_LOCK_ID})
+    `;
+  }
 }

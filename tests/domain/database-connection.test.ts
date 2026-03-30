@@ -1,4 +1,7 @@
-import { getDatabaseConnectionString } from "@/lib/database-connection";
+import {
+  getDatabaseConnectionString,
+  getDatabasePoolConfig,
+} from "@/lib/database-connection";
 
 describe("getDatabaseConnectionString", () => {
   it("returns the configured database url when present", () => {
@@ -21,5 +24,32 @@ describe("getDatabaseConnectionString", () => {
     expect(getDatabaseConnectionString({})).toBe(
       "postgresql://lead_intelligence:lead_intelligence@localhost:5432/lead_intelligence",
     );
+  });
+});
+
+describe("getDatabasePoolConfig", () => {
+  it("uses a single database connection by default in production", () => {
+    expect(
+      getDatabasePoolConfig({
+        DATABASE_URL: "postgresql://remote",
+        NODE_ENV: "production",
+      }),
+    ).toMatchObject({
+      connectionString: "postgresql://remote",
+      max: 1,
+    });
+  });
+
+  it("allows the pool size to be overridden explicitly", () => {
+    expect(
+      getDatabasePoolConfig({
+        DATABASE_URL: "postgresql://remote",
+        NODE_ENV: "production",
+        DATABASE_POOL_MAX: "3",
+      }),
+    ).toMatchObject({
+      connectionString: "postgresql://remote",
+      max: 3,
+    });
   });
 });

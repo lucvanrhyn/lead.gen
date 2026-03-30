@@ -7,9 +7,13 @@ const enrichmentJobCreateMany = vi.fn();
 const batchLeadUpdate = vi.fn();
 const batchLeadFindMany = vi.fn();
 const leadBatchUpdate = vi.fn();
+const queryRaw = vi.fn();
+const executeRaw = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   db: {
+    $queryRaw: queryRaw,
+    $executeRaw: executeRaw,
     enrichmentJob: {
       findMany: enrichmentJobFindMany,
       updateMany: enrichmentJobUpdateMany,
@@ -35,6 +39,7 @@ vi.mock("@/lib/orchestration/full-pipeline", () => ({
 describe("discovery queue worker", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryRaw.mockResolvedValue([{ locked: true }]);
   });
 
   it("enqueues pending discovery jobs for queued companies", async () => {
@@ -114,6 +119,7 @@ describe("discovery queue worker", () => {
         failedCompanies: 0,
       },
     });
+    expect(executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it("schedules a retry when a queued discovery job fails before max attempts", async () => {
@@ -158,5 +164,20 @@ describe("discovery queue worker", () => {
         }),
       }),
     });
+  });
+
+  it("skips work when another discovery worker already holds the advisory lock", async () => {
+    queryRaw.mockResolvedValueOnce([{ locked: false }]);
+
+    const { processQueuedDiscoveryJobs } = await import("@/lib/jobs/worker");
+    const result = await processQueuedDiscoveryJobs({ limit: 1 });
+
+    expect(result).toEqual({
+      claimedCount: 0,
+      processed: [],
+      skippedReason: "worker-locked",
+    });
+    expect(enrichmentJobFindMany).not.toHaveBeenCalled();
+    expect(executeRaw).not.toHaveBeenCalled();
   });
 });
