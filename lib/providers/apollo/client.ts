@@ -327,7 +327,9 @@ export async function persistApolloEnrichment(
   await db.company.update({
     where: { id: companyId },
     data: {
-      name: company.name,
+      // Only overwrite name if Apollo returned a real name — never replace a
+      // known name with the "Unknown company" sentinel.
+      ...(company.name !== "Unknown company" ? { name: company.name } : {}),
       website: company.website,
       phone: company.phone,
       normalizedDomain: company.normalizedDomain,

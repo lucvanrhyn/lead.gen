@@ -79,7 +79,7 @@ export function buildOutreachDraft(input: {
         : `I spent some time reviewing the public footprint for ${input.companyName}. There looks to be a real opportunity around ${input.pain.toLowerCase()}. I drafted a concise ${input.leadMagnetTitle} that focuses on ${input.serviceAngle.toLowerCase()}. Happy to send it if that would be useful.`;
 
   return outreachSchema.parse({
-    email_subject_1: `${input.companyName}: ${input.leadMagnetTitle}`,
+    email_subject_1: input.leadMagnetTitle,
     email_subject_2: `A quick idea on ${input.pain.toLowerCase()}`,
     cold_email_short: `${introName}${shortCta}`,
     cold_email_medium: `${introName}${mediumCta}`,

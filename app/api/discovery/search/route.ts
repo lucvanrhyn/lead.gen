@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { dispatchDiscoveryProcessing } from "@/lib/jobs/dispatch";
+import { processQueuedDiscoveryJobs } from "@/lib/jobs/worker";
 import { createDiscoveryBatch } from "@/lib/orchestration/discovery-batch";
 
 const discoveryRequestSchema = z.object({
@@ -21,8 +21,10 @@ export async function POST(request: Request) {
 
     if (input.autoRunPipeline ?? true) {
       const batchSize = Math.min(input.maxResults ?? 10, 5);
+      // Process jobs directly in-process after the response — avoids the HTTP
+      // self-call path which can fail silently on Vercel Hobby.
       after(async () => {
-        await dispatchDiscoveryProcessing({ request, limit: batchSize });
+        await processQueuedDiscoveryJobs({ limit: batchSize });
       });
     }
 
