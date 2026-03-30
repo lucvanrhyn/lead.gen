@@ -112,24 +112,24 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
         leadId={lead.company.id}
       />
 
-      <section className="rounded-[3rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.94)] p-7">
+      <section className="dashboard-panel rounded-[3rem] p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-[rgba(139,105,20,0.16)] px-4 py-2 text-xs uppercase tracking-[0.22em] text-tan">
+              <span className="dashboard-accent-pill rounded-full px-4 py-2 text-xs uppercase tracking-[0.22em]">
                 {lead.company.status}
               </span>
-              <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-4 py-2 text-xs uppercase tracking-[0.22em] text-[rgba(245,235,212,0.72)]">
+              <span className="dashboard-pill rounded-full px-4 py-2 text-xs uppercase tracking-[0.22em]">
                 Score {lead.company.scoreLabel}
               </span>
             </div>
             <div>
-              <h1 className="font-display text-5xl text-cream">{lead.company.name}</h1>
-              <p className="mt-3 max-w-3xl text-base leading-8 text-[rgba(245,235,212,0.72)]">
+              <h1 className="font-display text-5xl text-[#172033]">{lead.company.name}</h1>
+              <p className="mt-3 max-w-3xl text-base leading-8 text-[rgba(22,32,51,0.72)]">
                 {lead.company.description ?? "No company description yet."}
               </p>
             </div>
-            <div className="flex flex-wrap gap-4 text-sm text-[rgba(245,235,212,0.72)]">
+            <div className="flex flex-wrap gap-4 text-sm text-[rgba(22,32,51,0.72)]">
               <span>{lead.company.website ?? "No website"}</span>
               <span>{lead.company.locationSummary ?? "Unknown region"}</span>
               <span>{lead.company.phone ?? "No phone"}</span>
@@ -151,8 +151,8 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             className={cn(
               "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition",
               activeTab === id
-                ? "border-[rgba(210,180,140,0.3)] bg-[rgba(139,105,20,0.16)] text-cream"
-                : "border-[rgba(210,180,140,0.12)] text-[rgba(245,235,212,0.68)] hover:bg-[rgba(255,255,255,0.04)]",
+                ? "border-[rgba(101,122,179,0.24)] bg-[rgba(110,127,217,0.14)] text-[#1d2a47]"
+                : "border-[rgba(101,122,179,0.12)] bg-[rgba(255,255,255,0.62)] text-[rgba(22,32,51,0.68)] hover:bg-white",
             )}
             onClick={() => setActiveTab(id)}
             type="button"
@@ -166,7 +166,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
       <motion.section
         key={activeTab}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-[2rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.92)] p-6"
+        className="dashboard-panel rounded-[2rem] p-6"
         initial={{ opacity: 0, y: 16 }}
         transition={{ type: "spring", stiffness: 90, damping: 22 }}
       >
@@ -265,17 +265,17 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             {lead.outreachDrafts.map((draft) => (
               <article
                 key={`${draft.id}-engagement-actions`}
-                className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                className="dashboard-panel-soft rounded-[1.5rem] p-5"
               >
-                <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                <p className="dashboard-eyebrow">
                   {draft.draftType === "FOLLOW_UP" ? `Follow-up sequence ${draft.sequenceStep}` : "Initial outreach"}
                 </p>
-                <h2 className="mt-3 font-display text-2xl text-cream">{draft.emailSubject1}</h2>
+                <h2 className="mt-3 font-display text-2xl text-[#172033]">{draft.emailSubject1}</h2>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(["OPEN", "CLICK", "ASSET_VIEW", "REPLY"] as const).map((eventType) => (
                     <button
                       key={`${draft.id}-${eventType}`}
-                      className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                      className="dashboard-secondary-button rounded-full px-4 py-2 text-sm disabled:opacity-60"
                       disabled={
                         pendingEngagementDraftId === draft.id ||
                         draft.gmailSyncStatus !== "SYNCED"
@@ -288,7 +288,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                   ))}
                 </div>
                 {draft.gmailSyncStatus !== "SYNCED" ? (
-                  <p className="mt-3 text-sm text-[rgba(245,235,212,0.62)]">
+                  <p className="mt-3 text-sm text-[rgba(22,32,51,0.62)]">
                     Engagement logging unlocks after this draft has been synced to Gmail.
                   </p>
                 ) : null}
@@ -308,24 +308,24 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               (lead.leadMagnetAssets ?? []).map((asset) => (
                 <article
                   key={asset.id}
-                  className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                  className="dashboard-panel-soft rounded-[1.5rem] p-5"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-2">
-                      <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                      <p className="dashboard-eyebrow">
                         Hosted asset
                       </p>
-                      <h2 className="font-display text-2xl text-cream">{asset.headline}</h2>
-                      <p className="text-sm leading-7 text-[rgba(245,235,212,0.72)]">{asset.intro}</p>
-                      <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-[rgba(245,235,212,0.72)]">
-                        <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1">
+                      <h2 className="font-display text-2xl text-[#172033]">{asset.headline}</h2>
+                      <p className="text-sm leading-7 text-[rgba(22,32,51,0.72)]">{asset.intro}</p>
+                      <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em] text-[rgba(22,32,51,0.72)]">
+                        <span className="dashboard-pill rounded-full px-3 py-1">
                           Views {asset.viewCount}
                         </span>
-                        <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1">
+                        <span className="dashboard-pill rounded-full px-3 py-1">
                           {asset.status.replaceAll("_", " ")}
                         </span>
                         {asset.followUpCreatedAtLabel ? (
-                          <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1">
+                          <span className="dashboard-pill rounded-full px-3 py-1">
                             Follow-up locked {asset.followUpCreatedAtLabel}
                           </span>
                         ) : null}
@@ -333,19 +333,19 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                     </div>
 
                     <Link
-                      className="inline-flex items-center justify-center rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream transition hover:bg-[rgba(255,255,255,0.04)]"
+                      className="dashboard-secondary-button inline-flex items-center justify-center rounded-full px-4 py-3 text-sm transition hover:bg-white"
                       href={asset.assetPath}
                     >
                       Open asset page
                     </Link>
                   </div>
-                  <div className="mt-4 grid gap-2 text-sm text-[rgba(245,235,212,0.72)]">
+                  <div className="mt-4 grid gap-2 text-sm text-[rgba(22,32,51,0.72)]">
                     {asset.firstViewedAtLabel ? <p>First viewed: {asset.firstViewedAtLabel}</p> : null}
                     {asset.lastViewedAtLabel ? <p>Last viewed: {asset.lastViewedAtLabel}</p> : null}
                     {asset.diagnosticFormUrl ? (
                       <p>
                         Diagnostic form:{" "}
-                        <a className="underline decoration-[rgba(210,180,140,0.3)]" href={asset.diagnosticFormUrl}>
+                        <a className="underline decoration-[rgba(101,122,179,0.3)]" href={asset.diagnosticFormUrl}>
                           {asset.diagnosticFormUrl}
                         </a>
                       </p>
@@ -372,18 +372,18 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               lead.diagnosticForms.map((form) => (
                 <article
                   key={form.id}
-                  className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                  className="dashboard-panel-soft rounded-[1.5rem] p-5"
                 >
-                  <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                  <p className="dashboard-eyebrow">
                     {form.industry}
                   </p>
-                  <h2 className="mt-3 font-display text-2xl text-cream">{form.formTitle}</h2>
-                  <p className="mt-3 text-sm leading-7 text-[rgba(245,235,212,0.72)]">
+                  <h2 className="mt-3 font-display text-2xl text-[#172033]">{form.formTitle}</h2>
+                  <p className="mt-3 text-sm leading-7 text-[rgba(22,32,51,0.72)]">
                     {form.outreachCtaShort} Estimated completion time: {form.estimatedCompletionTime}. Response status:{" "}
                     {form.responseStatus}.
                   </p>
                   {form.responseSummary ? (
-                    <div className="mt-4 grid gap-2 text-sm text-[rgba(245,235,212,0.72)]">
+                    <div className="mt-4 grid gap-2 text-sm text-[rgba(22,32,51,0.72)]">
                       {"keyPain" in form.responseSummary && typeof form.responseSummary.keyPain === "string" ? (
                         <p>Key pain: {form.responseSummary.keyPain}</p>
                       ) : null}
@@ -402,14 +402,14 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                     {form.googleFormUrl ? (
                       <>
                         <Link
-                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream"
+                          className="dashboard-secondary-button rounded-full px-4 py-2 text-sm"
                           href={form.googleFormUrl}
                           target="_blank"
                         >
                           Open Google Form
                         </Link>
                         <button
-                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          className="dashboard-secondary-button rounded-full px-4 py-2 text-sm disabled:opacity-60"
                           disabled={pendingOutreachAction === `form-sync:${form.id}`}
                           onClick={() =>
                             handleOutreachAction(
@@ -425,7 +425,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                       </>
                     ) : (
                       <button
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                        className="dashboard-secondary-button rounded-full px-4 py-2 text-sm disabled:opacity-60"
                         disabled={pendingOutreachAction === `form:${form.id}`}
                         onClick={() =>
                           handleOutreachAction(
@@ -450,20 +450,20 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               lead.outreachDrafts.map((draft) => (
                 <article
                   key={draft.id}
-                  className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                  className="dashboard-panel-soft rounded-[1.5rem] p-5"
                 >
-                  <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+                  <p className="dashboard-eyebrow">
                     {draft.emailSubject2} • {draft.approvalStatus.replaceAll("_", " ")}
                   </p>
-                  <h2 className="mt-3 font-display text-2xl text-cream">{draft.emailSubject1}</h2>
-                  <p className="mt-3 text-sm leading-7 text-[rgba(245,235,212,0.72)] whitespace-pre-line">
+                  <h2 className="mt-3 font-display text-2xl text-[#172033]">{draft.emailSubject1}</h2>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[rgba(22,32,51,0.72)]">
                     {`${draft.coldEmailShort}\n\n${draft.coldEmailMedium}\n\n${draft.assetPath ? `Hosted asset: ${draft.assetPath}\n\n` : ""}${draft.diagnosticFormUrl ? `Diagnostic form: ${draft.diagnosticFormUrl}\n\n` : ""}Follow-up: ${draft.followUp1}\n\nSequence: ${draft.sequenceStep} • ${draft.draftType.replaceAll("_", " ")}\n\nApproval: ${draft.approvalStatus.replaceAll("_", " ")} • Gmail: ${draft.gmailSyncStatus.replaceAll("_", " ")} • Sheets: ${draft.sheetSyncStatus.replaceAll("_", " ")}`}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {draft.approvalStatus === "APPROVED" ? (
                       <>
                         <button
-                          className="rounded-full bg-cream px-4 py-2 text-sm font-semibold text-[#120f0c] disabled:opacity-60"
+                          className="dashboard-primary-button rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
                           disabled={pendingOutreachAction === `gmail:${draft.id}`}
                           onClick={() =>
                             handleOutreachAction(
@@ -477,7 +477,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                           {draft.gmailSyncStatus === "SYNCED" ? "Refresh Gmail draft" : "Create Gmail draft"}
                         </button>
                         <button
-                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          className="dashboard-secondary-button rounded-full px-4 py-2 text-sm disabled:opacity-60"
                           disabled={pendingOutreachAction === `sheets:${draft.id}`}
                           onClick={() =>
                             handleOutreachAction(
@@ -491,7 +491,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                           Sync to Sheets
                         </button>
                         <button
-                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          className="dashboard-secondary-button rounded-full px-4 py-2 text-sm disabled:opacity-60"
                           disabled={
                             pendingOutreachAction === `thread:${draft.id}` ||
                             draft.gmailSyncStatus !== "SYNCED" ||
@@ -509,7 +509,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                           Refresh Gmail replies
                         </button>
                         <button
-                          className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream disabled:opacity-60"
+                          className="dashboard-secondary-button rounded-full px-4 py-2 text-sm disabled:opacity-60"
                           disabled={
                             pendingOutreachAction === `hubspot:${draft.id}` ||
                             draft.gmailSyncStatus !== "SYNCED"
@@ -536,8 +536,8 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             {outreachMessage ? <p className="text-sm text-[#c8e2c0]">{outreachMessage}</p> : null}
             {outreachError ? <p className="text-sm text-[#f1b08f]">{outreachError}</p> : null}
             {lead.outreachDrafts.some((draft) => draft.assetPath) ? (
-              <div className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5">
-                <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+              <div className="dashboard-panel-soft rounded-[1.5rem] p-5">
+                <p className="dashboard-eyebrow">
                   Hosted assets
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
@@ -546,7 +546,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
                     .map((draft) => (
                       <Link
                         key={`${draft.id}-asset`}
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-2 text-sm text-cream"
+                        className="dashboard-secondary-button rounded-full px-4 py-2 text-sm"
                         href={draft.assetPath ?? "#"}
                         target="_blank"
                       >
@@ -586,9 +586,9 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <article className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5">
-      <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">{label}</p>
-      <p className="mt-3 text-lg text-cream">{value}</p>
+    <article className="dashboard-panel-soft rounded-[1.5rem] p-5">
+      <p className="dashboard-eyebrow">{label}</p>
+      <p className="mt-3 text-lg text-[#172033]">{value}</p>
     </article>
   );
 }
@@ -603,17 +603,17 @@ function DetailCard({
   body: string;
 }) {
   return (
-    <article className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5">
-      <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">{label}</p>
-      <h2 className="mt-3 font-display text-2xl text-cream">{title}</h2>
-      <p className="mt-3 text-sm leading-7 text-[rgba(245,235,212,0.72)]">{body}</p>
+    <article className="dashboard-panel-soft rounded-[1.5rem] p-5">
+      <p className="dashboard-eyebrow">{label}</p>
+      <h2 className="mt-3 font-display text-2xl text-[#172033]">{title}</h2>
+      <p className="mt-3 text-sm leading-7 text-[rgba(22,32,51,0.72)]">{body}</p>
     </article>
   );
 }
 
 function EmptyPanel({ message }: { message: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-[rgba(210,180,140,0.18)] p-6 text-sm text-[rgba(245,235,212,0.68)]">
+    <div className="rounded-[1.5rem] border border-dashed border-[rgba(101,122,179,0.18)] p-6 text-sm text-[rgba(22,32,51,0.68)]">
       {message}
     </div>
   );

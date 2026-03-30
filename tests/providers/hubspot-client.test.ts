@@ -95,8 +95,8 @@ describe("hubspot client payload builders", () => {
     ).toEqual({
       properties: {
         email: "jane@demo-dental.invalid",
-        firstname: "Megan",
-        lastname: "Jacobs",
+        firstname: "Jane",
+        lastname: "Demo",
         jobtitle: "Practice Manager",
         phone: "+27 82 555 0199",
       },

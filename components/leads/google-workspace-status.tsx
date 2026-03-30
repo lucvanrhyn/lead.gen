@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { type GoogleWorkspaceStatusViewModel } from "@/lib/leads/view-models";
 
 export function GoogleWorkspaceStatus({
@@ -8,19 +6,19 @@ export function GoogleWorkspaceStatus({
   workspace: GoogleWorkspaceStatusViewModel;
 }) {
   return (
-    <section className="rounded-[2rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.92)] p-6">
+    <section className="dashboard-panel rounded-[2rem] p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
-          <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+          <p className="dashboard-eyebrow">
             Google Workspace
           </p>
-          <h2 className="font-display text-3xl text-cream">{workspace.title}</h2>
-          <p className="max-w-3xl text-sm leading-7 text-[rgba(245,235,212,0.72)]">
+          <h2 className="font-display text-3xl text-[#172033]">{workspace.title}</h2>
+          <p className="dashboard-copy max-w-3xl text-sm leading-7">
             {workspace.description}
             {workspace.connectedEmail ? ` Connected as ${workspace.connectedEmail}.` : ""}
           </p>
           {workspace.gmailWatchStatus ? (
-            <div className="text-xs uppercase tracking-[0.18em] text-[rgba(245,235,212,0.58)]">
+            <div className="text-xs uppercase tracking-[0.18em] text-[rgba(22,32,51,0.56)]">
               Gmail watch {workspace.gmailWatchStatus.toLowerCase().replace(/_/g, " ")}
               {workspace.gmailWatchExpiresAtLabel
                 ? ` · renew by ${workspace.gmailWatchExpiresAtLabel}`
@@ -39,14 +37,14 @@ export function GoogleWorkspaceStatus({
 
         <div className="flex flex-wrap items-center gap-3">
           {workspace.canStartOAuth ? (
-            <Link
-              className="inline-flex items-center justify-center rounded-full bg-cream px-5 py-3 text-sm font-semibold text-[#120f0c] transition hover:bg-[#efe3ca]"
+            <a
+              className="dashboard-primary-button inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition hover:opacity-95"
               href="/api/google-workspace/connect"
             >
               {workspace.status === "CONNECTED" ? "Reconnect Google" : "Connect Google"}
-            </Link>
+            </a>
           ) : (
-            <div className="rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm text-[rgba(245,235,212,0.72)]">
+            <div className="dashboard-secondary-button rounded-full px-5 py-3 text-sm">
               Add env vars to enable connection
             </div>
           )}
@@ -54,7 +52,7 @@ export function GoogleWorkspaceStatus({
           {workspace.canRegisterGmailWatch ? (
             <form action="/api/google-workspace/gmail-watch/register" method="post">
               <button
-                className="inline-flex items-center justify-center rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm font-semibold text-cream transition hover:border-[rgba(210,180,140,0.32)]"
+                className="dashboard-secondary-button inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition hover:bg-white"
                 type="submit"
               >
                 {workspace.gmailWatchStatus === "SYNCED" ? "Renew Gmail watch" : "Start Gmail watch"}

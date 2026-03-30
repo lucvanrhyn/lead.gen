@@ -23,12 +23,20 @@ Apollo-first lead discovery and enrichment for high-quality B2B outreach.
 5. Run `npm run db:push`
 6. Run `npm run db:seed`
 7. Run `npm run dev`
+8. Open `http://localhost:3000/login` and sign in with the configured operator account
 
 If Docker is available, `docker compose up postgres -d` will start the expected local database service.
 
 Set `APP_BASE_URL` to the canonical app URL for link generation:
 - local: `http://localhost:3000`
 - production: your Vercel or custom domain URL
+
+Set these operator auth env vars to protect the dashboard:
+- `OPERATOR_EMAIL`
+- `OPERATOR_PASSWORD`
+- `OPERATOR_SESSION_SECRET`
+
+Set `CRON_SECRET` so Vercel cron requests can authenticate against internal maintenance routes.
 
 The app uses `APP_BASE_URL` for Gmail draft links, hosted lead-magnet links, and operator-ledger URLs. If it is missing, server routes fall back to the current request origin.
 
@@ -77,7 +85,7 @@ For repeatable repo usage, prefer the npm scripts above over a global `playwrigh
 
 ## Batch automation and forms
 
-- Discovery now creates a persisted `lead_batch` and auto-runs the full pipeline for each discovered company by default.
+- Discovery now creates a persisted `lead_batch` and queues the full pipeline for each discovered company by default.
 - The company pipeline now generates:
   - Apollo enrichment
   - Firecrawl extraction when a website exists
@@ -104,6 +112,7 @@ To enable real Gmail draft handoff and Google Sheets syncing:
 2. Create an OAuth client for a web application.
 3. Register this redirect URI:
    - `http://localhost:3000/api/google-workspace/callback`
+   - `https://<your-production-domain>/api/google-workspace/callback`
 4. Set these env vars in `.env` and `.env.local`:
    - `GOOGLE_OAUTH_CLIENT_ID`
    - `GOOGLE_OAUTH_CLIENT_SECRET`
@@ -133,7 +142,14 @@ For automatic Gmail engagement ingestion:
 - Set `GOOGLE_GMAIL_PUBSUB_TOPIC` to the full topic name, for example `projects/<project-id>/topics/<topic-name>`.
 - Set `GOOGLE_GMAIL_PUSH_AUDIENCE` to the public webhook URL you configure on the push subscription.
 - If you configure the push subscription with an authenticated service account, set `GOOGLE_GMAIL_PUSH_SERVICE_ACCOUNT_EMAIL` so the app can verify the caller.
-- Gmail watches expire, so renew them periodically. The app exposes a `Renew Gmail watch` action in the dashboard, and you can automate that route with a cron later if you want hands-off renewal.
+- Gmail watches expire, so renew them periodically. This repo now includes a cron-backed renewal route in `vercel.json`, protected with `CRON_SECRET`.
+
+## Production hardening notes
+
+- Google OAuth env vars are now trimmed and validated before the consent URL is generated. This prevents malformed Google requests caused by accidental whitespace in Vercel env values.
+- Discovery queues company processing work instead of running the full pipeline inside the initial request.
+- `vercel.json` schedules queued job processing and Gmail watch renewal for production deployments.
+- The dashboard is now protected by a signed operator session instead of being publicly accessible.
 
 ## Optional HubSpot mirror
 

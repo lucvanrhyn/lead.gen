@@ -6,22 +6,17 @@ import {
 } from "@prisma/client";
 import { google } from "googleapis";
 
+import {
+  getGoogleOAuthConfig,
+  getRequiredTrimmedEnv,
+} from "@/lib/config/env";
 import { GOOGLE_WORKSPACE_SCOPES } from "@/lib/domain/google-workspace";
 
 type GoogleWorkspaceEnv = NodeJS.ProcessEnv;
 
-function getRequiredEnvValue(name: keyof GoogleWorkspaceEnv, env: GoogleWorkspaceEnv = process.env) {
-  const value = env[name];
-  if (!value) {
-    throw new Error(`Missing Google Workspace configuration: ${name}.`);
-  }
-
-  return value;
-}
-
 function getTokenEncryptionKey(env: GoogleWorkspaceEnv = process.env) {
   return createHash("sha256")
-    .update(getRequiredEnvValue("GOOGLE_WORKSPACE_TOKEN_SECRET", env))
+    .update(getRequiredTrimmedEnv("GOOGLE_WORKSPACE_TOKEN_SECRET", env))
     .digest();
 }
 
@@ -61,10 +56,12 @@ export function decryptGoogleWorkspaceToken(
 }
 
 export function createGoogleOAuthClient(env: GoogleWorkspaceEnv = process.env) {
+  const config = getGoogleOAuthConfig(env);
+
   return new google.auth.OAuth2(
-    getRequiredEnvValue("GOOGLE_OAUTH_CLIENT_ID", env),
-    getRequiredEnvValue("GOOGLE_OAUTH_CLIENT_SECRET", env),
-    getRequiredEnvValue("GOOGLE_OAUTH_REDIRECT_URI", env),
+    config.clientId,
+    config.clientSecret,
+    config.redirectUri,
   );
 }
 

@@ -2,6 +2,7 @@ import { JobStatus } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { deriveBatchStatusSummary } from "@/lib/domain/batches";
+import { enqueueDiscoveryJobs } from "@/lib/jobs/worker";
 import { runCompanyFullPipeline } from "@/lib/orchestration/full-pipeline";
 import {
   type GooglePlacesSearchInput,
@@ -84,7 +85,7 @@ export async function createDiscoveryBatch(input: GooglePlacesSearchInput & { au
     });
   }
 
-  let summary: {
+  const summary: {
     status: JobStatus;
     completedCompanies: number;
     failedCompanies: number;
@@ -102,38 +103,7 @@ export async function createDiscoveryBatch(input: GooglePlacesSearchInput & { au
   };
 
   if (input.autoRunPipeline ?? true) {
-    await db.leadBatch.update({
-      where: { id: batch.id },
-      data: { status: JobStatus.RUNNING },
-    });
-
-    summary = await runDiscoveryBatchPipeline(
-      batchLeadRows.map((row) => ({ companyId: row.companyId })),
-    );
-
-    for (const item of summary.items) {
-      await db.batchLead.update({
-        where: {
-          batchId_companyId: {
-            batchId: batch.id,
-            companyId: item.companyId,
-          },
-        },
-        data: {
-          status: item.status,
-          lastError: item.error,
-        },
-      });
-    }
-
-    await db.leadBatch.update({
-      where: { id: batch.id },
-      data: {
-        status: summary.status,
-        completedCompanies: summary.completedCompanies,
-        failedCompanies: summary.failedCompanies,
-      },
-    });
+    await enqueueDiscoveryJobs(batchLeadRows);
   }
 
   return {

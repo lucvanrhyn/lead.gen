@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { dispatchDiscoveryProcessing } from "@/lib/jobs/dispatch";
 import { createDiscoveryBatch } from "@/lib/orchestration/discovery-batch";
 
 const discoveryRequestSchema = z.object({
@@ -17,6 +18,12 @@ export async function POST(request: Request) {
     const input = discoveryRequestSchema.parse(json);
 
     const result = await createDiscoveryBatch(input);
+
+    if (input.autoRunPipeline ?? true) {
+      after(async () => {
+        await dispatchDiscoveryProcessing({ request });
+      });
+    }
 
     return NextResponse.json(result);
   } catch (error) {

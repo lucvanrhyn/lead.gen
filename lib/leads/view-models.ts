@@ -14,6 +14,13 @@ export type LeadTableRow = {
   approvalStatus?: string;
 };
 
+export type LeadTablePagination = {
+  page: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+};
+
 export type ApprovalQueueSummary = {
   pendingApprovalCount: number;
   approvedCount: number;

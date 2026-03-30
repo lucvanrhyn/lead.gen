@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/internal/jobs/process",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/internal/google-workspace/renew-watch",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

@@ -49,7 +49,7 @@ export function ManualReviewToggle({
 
   return (
     <button
-      className="rounded-full border border-[rgba(210,180,140,0.18)] px-4 py-2 text-sm text-cream transition hover:bg-[rgba(255,255,255,0.04)] disabled:cursor-not-allowed disabled:opacity-60"
+      className="dashboard-secondary-button rounded-full px-4 py-2 text-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
       disabled={pending}
       onClick={handleToggle}
       type="button"

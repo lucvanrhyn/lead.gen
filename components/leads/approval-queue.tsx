@@ -75,18 +75,18 @@ export function ApprovalQueue({
   }
 
   return (
-    <section className="rounded-[2rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.92)] p-6">
+    <section className="dashboard-panel rounded-[2rem] p-6">
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+            <p className="dashboard-eyebrow">
               Approval queue
             </p>
-            <h2 className="mt-2 font-display text-3xl text-cream">
+            <h2 className="mt-2 font-display text-3xl text-[#172033]">
               Review generated outreach before handoff
             </h2>
           </div>
-          <div className="flex flex-wrap gap-3 text-sm text-[rgba(245,235,212,0.72)]">
+          <div className="flex flex-wrap gap-3 text-sm text-[rgba(22,32,51,0.72)]">
             <QueueBadge label="Pending approval" value={summary.pendingApprovalCount} />
             <QueueBadge label="Approved" value={summary.approvedCount} />
             <QueueBadge label="Gmail synced" value={summary.syncedDraftCount} />
@@ -104,7 +104,7 @@ export function ApprovalQueue({
         ) : null}
 
         {items.length === 0 ? (
-          <div className="rounded-[1.5rem] border border-dashed border-[rgba(210,180,140,0.18)] p-5 text-sm text-[rgba(245,235,212,0.68)]">
+          <div className="rounded-[1.5rem] border border-dashed border-[rgba(101,122,179,0.18)] p-5 text-sm text-[rgba(22,32,51,0.68)]">
             No generated drafts are waiting for review yet.
           </div>
         ) : (
@@ -112,27 +112,27 @@ export function ApprovalQueue({
             {items.map((item) => (
               <article
                 key={item.draftId}
-                className="rounded-[1.5rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-5"
+                className="dashboard-panel-soft rounded-[1.5rem] p-5"
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-2">
-                    <p className="font-display text-2xl text-cream">{item.companyName}</p>
-                    <p className="text-sm text-[rgba(245,235,212,0.72)]">
+                    <p className="font-display text-2xl text-[#172033]">{item.companyName}</p>
+                    <p className="text-sm text-[rgba(22,32,51,0.72)]">
                       {item.contactName ? `${item.contactName} • ` : ""}
                       {item.emailSubject}
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.18em]">
-                      <span className="rounded-full bg-[rgba(139,105,20,0.16)] px-3 py-1 text-tan">
+                      <span className="dashboard-accent-pill rounded-full px-3 py-1">
                         {item.approvalStatus.replaceAll("_", " ")}
                       </span>
-                      <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1 text-[rgba(245,235,212,0.72)]">
+                      <span className="dashboard-pill rounded-full px-3 py-1">
                         Gmail {item.gmailSyncStatus.toLowerCase().replaceAll("_", " ")}
                       </span>
-                      <span className="rounded-full border border-[rgba(210,180,140,0.12)] px-3 py-1 text-[rgba(245,235,212,0.72)]">
+                      <span className="dashboard-pill rounded-full px-3 py-1">
                         Sheets {item.sheetSyncStatus.toLowerCase().replaceAll("_", " ")}
                       </span>
                       {item.suppressionReason ? (
-                        <span className="rounded-full border border-[rgba(194,126,82,0.2)] px-3 py-1 text-[#f1b08f]">
+                        <span className="rounded-full border border-[rgba(194,126,82,0.2)] px-3 py-1 text-[#b26d4c]">
                           {item.suppressionReason.replaceAll("_", " ")}
                         </span>
                       ) : null}
@@ -140,7 +140,7 @@ export function ApprovalQueue({
                   </div>
 
                   <Link
-                    className="inline-flex items-center justify-center rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm text-cream transition hover:bg-[rgba(255,255,255,0.04)]"
+                    className="dashboard-secondary-button inline-flex items-center justify-center rounded-full px-5 py-3 text-sm transition hover:bg-white"
                     href={`/leads/${item.leadId}`}
                   >
                     Open lead
@@ -148,7 +148,7 @@ export function ApprovalQueue({
                   {item.approvalStatus === "PENDING_APPROVAL" ? (
                     <div className="flex gap-2">
                       <button
-                        className="rounded-full bg-cream px-4 py-3 text-sm font-semibold text-[#120f0c] disabled:opacity-60"
+                        className="dashboard-primary-button rounded-full px-4 py-3 text-sm font-semibold disabled:opacity-60"
                         disabled={pendingDraftId === item.draftId}
                         onClick={() => handleAction(item.draftId, "approve")}
                         type="button"
@@ -156,7 +156,7 @@ export function ApprovalQueue({
                         Approve
                       </button>
                       <button
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        className="dashboard-secondary-button rounded-full px-4 py-3 text-sm disabled:opacity-60"
                         disabled={pendingDraftId === item.draftId}
                         onClick={() => handleAction(item.draftId, "reject")}
                         type="button"
@@ -167,7 +167,7 @@ export function ApprovalQueue({
                   ) : item.approvalStatus === "APPROVED" ? (
                     <div className="flex flex-wrap gap-2">
                       <button
-                        className="rounded-full bg-cream px-4 py-3 text-sm font-semibold text-[#120f0c] disabled:opacity-60"
+                        className="dashboard-primary-button rounded-full px-4 py-3 text-sm font-semibold disabled:opacity-60"
                         disabled={
                           pendingDraftId === item.draftId ||
                           !workspaceConnected ||
@@ -179,7 +179,7 @@ export function ApprovalQueue({
                         {item.gmailSyncStatus === "SYNCED" ? "Gmail synced" : "Create Gmail draft"}
                       </button>
                       <button
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        className="dashboard-secondary-button rounded-full px-4 py-3 text-sm disabled:opacity-60"
                         disabled={
                           pendingDraftId === item.draftId ||
                           !workspaceConnected ||
@@ -191,7 +191,7 @@ export function ApprovalQueue({
                         {item.sheetSyncStatus === "SYNCED" ? "Sheets synced" : "Sync to Sheets"}
                       </button>
                       <button
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        className="dashboard-secondary-button rounded-full px-4 py-3 text-sm disabled:opacity-60"
                         disabled={
                           pendingDraftId === item.draftId ||
                           item.gmailSyncStatus !== "SYNCED" ||
@@ -203,7 +203,7 @@ export function ApprovalQueue({
                         Refresh replies
                       </button>
                       <button
-                        className="rounded-full border border-[rgba(210,180,140,0.16)] px-4 py-3 text-sm text-cream disabled:opacity-60"
+                        className="dashboard-secondary-button rounded-full px-4 py-3 text-sm disabled:opacity-60"
                         disabled={
                           pendingDraftId === item.draftId ||
                           item.draftId.startsWith("suppressed:") ||
@@ -230,18 +230,18 @@ export function ApprovalQueue({
 
 function QueueBadge({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[1rem] border border-[rgba(210,180,140,0.12)] px-4 py-3">
-      <p className="font-serif text-[11px] uppercase tracking-[0.2em] text-tan">{label}</p>
-      <p className="mt-2 font-display text-2xl text-cream">{value}</p>
+    <div className="dashboard-panel-soft rounded-[1rem] px-4 py-3">
+      <p className="dashboard-eyebrow text-[11px]">{label}</p>
+      <p className="mt-2 font-display text-2xl text-[#172033]">{value}</p>
     </div>
   );
 }
 
 function AnalyticsBadge({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-[1.25rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] px-4 py-3">
-      <p className="font-serif text-[11px] uppercase tracking-[0.2em] text-tan">{label}</p>
-      <p className="mt-2 font-display text-xl text-cream">{value}</p>
+    <div className="dashboard-panel-soft rounded-[1.25rem] px-4 py-3">
+      <p className="dashboard-eyebrow text-[11px]">{label}</p>
+      <p className="mt-2 font-display text-xl text-[#172033]">{value}</p>
     </div>
   );
 }

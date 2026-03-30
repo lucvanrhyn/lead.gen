@@ -159,6 +159,30 @@ describe("LeadTable", () => {
     expect(screen.getByText("79 / 100")).toBeInTheDocument();
     expect(screen.getByText(/1 contact/i)).toBeInTheDocument();
   });
+
+  it("renders pagination controls when more than one page is available", () => {
+    render(
+      <LeadTable
+        leads={leadRows}
+        pagination={{
+          page: 2,
+          totalPages: 3,
+          hasPreviousPage: true,
+          hasNextPage: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: /previous page/i })).toHaveAttribute(
+      "href",
+      "/leads?page=1",
+    );
+    expect(screen.getByRole("link", { name: /next page/i })).toHaveAttribute(
+      "href",
+      "/leads?page=3",
+    );
+    expect(screen.getByText(/page 2 of 3/i)).toBeInTheDocument();
+  });
 });
 
 describe("LeadDetailView", () => {

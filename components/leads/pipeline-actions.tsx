@@ -91,20 +91,20 @@ export function PipelineActions({ leadId, hasWebsite }: PipelineActionsProps) {
   }
 
   return (
-    <section className="rounded-[2rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.92)] p-6">
+    <section className="dashboard-panel rounded-[2rem] p-6">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+            <p className="dashboard-eyebrow">
               Pipeline actions
             </p>
-            <h2 className="mt-2 font-display text-3xl text-cream">
+            <h2 className="mt-2 font-display text-3xl text-[#172033]">
               Run the generator on this lead
             </h2>
           </div>
 
           <button
-            className="inline-flex items-center gap-2 rounded-full bg-cream px-5 py-3 text-sm font-semibold text-[#120f0c] transition hover:bg-[#efe3ca] disabled:cursor-not-allowed disabled:opacity-60"
+            className="dashboard-primary-button inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={pendingAction !== null}
             onClick={handleRunAll}
             type="button"
@@ -122,16 +122,16 @@ export function PipelineActions({ leadId, hasWebsite }: PipelineActionsProps) {
           {actionConfig.map((action) => (
             <button
               key={action.id}
-              className="inline-flex items-center justify-between rounded-[1.25rem] border border-[rgba(210,180,140,0.14)] bg-[rgba(255,255,255,0.03)] px-4 py-4 text-left text-sm text-cream transition hover:bg-[rgba(255,255,255,0.06)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="dashboard-panel-soft inline-flex items-center justify-between rounded-[1.25rem] px-4 py-4 text-left text-sm text-[#172033] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               disabled={pendingAction !== null}
               onClick={() => handleSingleAction(action.endpoint, action.label)}
               type="button"
             >
               <span>{action.label}</span>
               {pendingAction === action.endpoint ? (
-                <LoaderCircle className="h-4 w-4 animate-spin text-tan" />
+                <LoaderCircle className="h-4 w-4 animate-spin text-[#6e7fd9]" />
               ) : (
-                <WandSparkles className="h-4 w-4 text-tan" />
+                <WandSparkles className="h-4 w-4 text-[#8d76d8]" />
               )}
             </button>
           ))}

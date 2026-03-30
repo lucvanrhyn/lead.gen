@@ -1,5 +1,7 @@
 import { WorkspaceConnectionStatus } from "@prisma/client";
 
+import { isPresentEnvValue } from "@/lib/config/env";
+
 export const GOOGLE_WORKSPACE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -11,13 +13,13 @@ export const GOOGLE_WORKSPACE_SCOPES = [
 
 export function getGoogleWorkspaceEnvState(env: NodeJS.ProcessEnv = process.env) {
   return {
-    hasClientId: Boolean(env.GOOGLE_OAUTH_CLIENT_ID),
-    hasClientSecret: Boolean(env.GOOGLE_OAUTH_CLIENT_SECRET),
-    hasRedirectUri: Boolean(env.GOOGLE_OAUTH_REDIRECT_URI),
-    hasSpreadsheetId: Boolean(env.GOOGLE_SHEETS_SPREADSHEET_ID),
-    hasTokenSecret: Boolean(env.GOOGLE_WORKSPACE_TOKEN_SECRET),
-    hasGmailPubSubTopic: Boolean(env.GOOGLE_GMAIL_PUBSUB_TOPIC),
-    hasGmailPushAudience: Boolean(env.GOOGLE_GMAIL_PUSH_AUDIENCE),
+    hasClientId: isPresentEnvValue(env.GOOGLE_OAUTH_CLIENT_ID),
+    hasClientSecret: isPresentEnvValue(env.GOOGLE_OAUTH_CLIENT_SECRET),
+    hasRedirectUri: isPresentEnvValue(env.GOOGLE_OAUTH_REDIRECT_URI),
+    hasSpreadsheetId: isPresentEnvValue(env.GOOGLE_SHEETS_SPREADSHEET_ID),
+    hasTokenSecret: isPresentEnvValue(env.GOOGLE_WORKSPACE_TOKEN_SECRET),
+    hasGmailPubSubTopic: isPresentEnvValue(env.GOOGLE_GMAIL_PUBSUB_TOPIC),
+    hasGmailPushAudience: isPresentEnvValue(env.GOOGLE_GMAIL_PUSH_AUDIENCE),
   };
 }
 

@@ -213,4 +213,54 @@ describe("google workspace gmail watch routes", () => {
       replyEventsCreated: 1,
     });
   });
+
+  it("renews the Gmail watch through a protected internal route when expiry is near", async () => {
+    process.env = {
+      ...process.env,
+      CRON_SECRET: "cron-secret",
+    };
+    findConnection.mockResolvedValueOnce({
+      provider: "google_workspace",
+      status: "CONNECTED",
+      encryptedAccessToken: "enc-access",
+      encryptedRefreshToken: "enc-refresh",
+      accessTokenExpiresAt: new Date("2026-04-01T10:00:00.000Z"),
+      gmailWatchExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    createAuthorizedGoogleClient.mockResolvedValueOnce({ token: "oauth-token" });
+    registerGoogleWorkspaceGmailWatch.mockResolvedValueOnce({
+      historyId: "history-456",
+      expiration: "2026-04-02T11:00:00.000Z",
+      topicName: "projects/demo/topics/gmail-engagement",
+    });
+    updateConnection.mockResolvedValueOnce({ id: "workspace-1" });
+
+    const { GET } = await import("@/app/api/internal/google-workspace/renew-watch/route");
+    const response = await GET(
+      new Request("http://localhost/api/internal/google-workspace/renew-watch", {
+        headers: {
+          authorization: "Bearer cron-secret",
+        },
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(registerGoogleWorkspaceGmailWatch).toHaveBeenCalled();
+    expect(updateConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { provider: "google_workspace" },
+        data: expect.objectContaining({
+          gmailWatchHistoryId: "history-456",
+          gmailWatchStatus: "SYNCED",
+          gmailWatchLastError: null,
+        }),
+      }),
+    );
+    expect(body).toMatchObject({
+      ok: true,
+      renewed: true,
+      skipped: false,
+    });
+  });
 });

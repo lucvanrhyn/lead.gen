@@ -11,6 +11,7 @@ import {
   type ApprovalQueueItem,
   type ApprovalQueueSummary,
   type CampaignAnalytics,
+  type LeadTablePagination,
   type GoogleWorkspaceStatusViewModel,
   type LeadDetailViewModel,
   type LeadTableRow,
@@ -28,12 +29,26 @@ function formatDateTime(value: Date) {
   return value.toISOString().slice(0, 16).replace("T", " ");
 }
 
-export async function getLeadSummaries(): Promise<LeadTableRow[]> {
+export async function getLeadSummaries(input?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{
+  leads: LeadTableRow[];
+  pagination: LeadTablePagination;
+}> {
+  const requestedPage = Math.max(1, input?.page ?? 1);
+  const pageSize = Math.max(1, Math.min(input?.pageSize ?? 10, 50));
+
   try {
+    const totalCount = await db.company.count();
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const page = Math.min(requestedPage, totalPages);
     const companies = await db.company.findMany({
       orderBy: {
         updatedAt: "desc",
       },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
       include: {
         contacts: {
           select: { id: true },
@@ -53,23 +68,39 @@ export async function getLeadSummaries(): Promise<LeadTableRow[]> {
       },
     });
 
-    return companies.map((company) => ({
-      id: company.id,
-      name: company.name,
-      website: company.website ?? undefined,
-      industry: company.industry ?? undefined,
-      locationSummary: company.locationSummary ?? undefined,
-      score: company.leadScores[0]?.totalScore,
-      scoreLabel: formatScore(company.leadScores[0]?.totalScore),
-      painConfidence: company.painHypotheses[0]?.confidenceScore ?? undefined,
-      sourceConfidence: company.sourceConfidence ?? undefined,
-      contactsCount: company.contacts.length,
-      manualReviewRequired: company.manualReviewRequired,
-      status: company.status,
-      approvalStatus: company.outreachDrafts[0]?.approvalStatus,
-    }));
+    return {
+      leads: companies.map((company) => ({
+        id: company.id,
+        name: company.name,
+        website: company.website ?? undefined,
+        industry: company.industry ?? undefined,
+        locationSummary: company.locationSummary ?? undefined,
+        score: company.leadScores[0]?.totalScore,
+        scoreLabel: formatScore(company.leadScores[0]?.totalScore),
+        painConfidence: company.painHypotheses[0]?.confidenceScore ?? undefined,
+        sourceConfidence: company.sourceConfidence ?? undefined,
+        contactsCount: company.contacts.length,
+        manualReviewRequired: company.manualReviewRequired,
+        status: company.status,
+        approvalStatus: company.outreachDrafts[0]?.approvalStatus,
+      })),
+      pagination: {
+        page,
+        totalPages,
+        hasPreviousPage: page > 1,
+        hasNextPage: page < totalPages,
+      },
+    };
   } catch {
-    return [];
+    return {
+      leads: [],
+      pagination: {
+        page: 1,
+        totalPages: 1,
+        hasPreviousPage: false,
+        hasNextPage: false,
+      },
+    };
   }
 }
 
