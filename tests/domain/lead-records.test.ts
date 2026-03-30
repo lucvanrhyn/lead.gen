@@ -8,20 +8,20 @@ describe("companySeedGraphSchema", () => {
     const parsed = companySeedGraphSchema.parse({
       company: {
         name: "Atlas Dental Group",
-        website: "https://atlasdental.co.za",
+        website: "https://demo-dental.invalid",
         industry: "Dental Clinics",
         location: "Cape Town, South Africa",
       },
       contacts: [
         {
-          fullName: "Megan Jacobs",
+          fullName: "Jane Demo",
           title: "Practice Manager",
-          email: "megan@atlasdental.co.za",
+          email: "jane@demo-dental.invalid",
         },
       ],
       sourceEvent: {
         provider: "manual_seed",
-        url: "https://atlasdental.co.za",
+        url: "https://demo-dental.invalid",
         confidence: 0.92,
       },
     });

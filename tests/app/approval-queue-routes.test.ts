@@ -29,7 +29,7 @@ describe("approve outreach draft route", () => {
     findDraft.mockResolvedValueOnce({
       id: "draft-1",
       contact: {
-        email: "megan@atlasdental.co.za",
+        email: "jane@demo-dental.invalid",
       },
     });
     findConnection.mockResolvedValueOnce({

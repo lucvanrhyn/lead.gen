@@ -37,16 +37,16 @@ describe("normalizeGooglePlaceCandidate", () => {
         location: { latitude: -33.9249, longitude: 18.4241 },
       },
       detailPlace: {
-        websiteUri: "https://atlasdental.co.za",
-        nationalPhoneNumber: "+27 21 555 0133",
+        websiteUri: "https://demo-dental.invalid",
+        nationalPhoneNumber: "+1 555 000 0000",
       },
     });
 
     expect(normalized).toMatchObject({
       externalId: "place_123",
       name: "Atlas Dental Group",
-      website: "https://atlasdental.co.za",
-      phone: "+27 21 555 0133",
+      website: "https://demo-dental.invalid",
+      phone: "+1 555 000 0000",
       primaryType: "dentist",
     });
     expect(normalized.confidence).toBeGreaterThan(0.7);

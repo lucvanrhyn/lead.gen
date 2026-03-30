@@ -6,12 +6,12 @@ import {
 
 describe("selectFirecrawlCandidatePages", () => {
   it("keeps only the relevant public business pages", () => {
-    const pages = selectFirecrawlCandidatePages("https://atlasdental.co.za", [
-      "https://atlasdental.co.za/",
-      "https://atlasdental.co.za/about",
-      "https://atlasdental.co.za/services",
-      "https://atlasdental.co.za/blog/new-smile-guide",
-      "https://atlasdental.co.za/login",
+    const pages = selectFirecrawlCandidatePages("https://demo-dental.invalid", [
+      "https://demo-dental.invalid/",
+      "https://demo-dental.invalid/about",
+      "https://demo-dental.invalid/services",
+      "https://demo-dental.invalid/blog/new-smile-guide",
+      "https://demo-dental.invalid/login",
       "https://facebook.com/atlasdental",
     ]);
 
@@ -24,10 +24,10 @@ describe("selectFirecrawlCandidatePages", () => {
   });
 
   it("accepts Firecrawl v2 link objects and ignores malformed entries", () => {
-    const pages = selectFirecrawlCandidatePages("https://atlasdental.co.za", [
-      { url: "https://atlasdental.co.za/" },
-      { url: "https://atlasdental.co.za/about" },
-      { url: "https://atlasdental.co.za/contact" },
+    const pages = selectFirecrawlCandidatePages("https://demo-dental.invalid", [
+      { url: "https://demo-dental.invalid/" },
+      { url: "https://demo-dental.invalid/about" },
+      { url: "https://demo-dental.invalid/contact" },
       { url: "/relative-path" },
       { url: "" },
     ]);
@@ -45,7 +45,7 @@ describe("normalizeFirecrawlPage", () => {
     const normalized = normalizeFirecrawlPage(
       {
         pageType: "ABOUT",
-        url: "https://atlasdental.co.za/about",
+        url: "https://demo-dental.invalid/about",
       },
       {
         data: {
@@ -70,7 +70,7 @@ describe("extractLeadWebsitePages", () => {
     await expect(
       extractLeadWebsitePages(
         {
-          website: "https://atlasdental.co.za",
+          website: "https://demo-dental.invalid",
         },
         {
           apiKey: "",

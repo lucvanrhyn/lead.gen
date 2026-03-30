@@ -12,7 +12,7 @@ describe("painHypothesisSchema", () => {
       evidence: [
         {
           source_type: "website",
-          source_url: "https://atlasdental.co.za",
+          source_url: "https://demo-dental.invalid",
           snippet: "same-week bookings and cosmetic smile packages",
           signal_type: "conversion_signal",
           confidence: 0.78,

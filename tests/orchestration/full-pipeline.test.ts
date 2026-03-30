@@ -91,10 +91,10 @@ describe("runCompanyFullPipeline", () => {
         {
           id: "contact-1",
           companyId: "company-1",
-          fullName: "Megan Jacobs",
+          fullName: "Jane Demo",
           firstName: "Megan",
           title: "Practice Manager",
-          email: "megan@atlasdental.co.za",
+          email: "jane@demo-dental.invalid",
           decisionMakerConfidence: 0.82,
         },
       ],

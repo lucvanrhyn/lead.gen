@@ -10,8 +10,8 @@ describe("buildDraftSheetRow", () => {
     const row = buildDraftSheetRow({
       draftId: "draft-1",
       companyName: "Atlas Dental Group",
-      contactName: "Megan Jacobs",
-      contactEmail: "megan@atlasdental.co.za",
+      contactName: "Jane Demo",
+      contactEmail: "jane@demo-dental.invalid",
       approvalStatus: "APPROVED",
       emailSubject: "A quick idea for Atlas Dental bookings",
       gmailSyncStatus: "READY",
@@ -20,7 +20,7 @@ describe("buildDraftSheetRow", () => {
     });
 
     expect(row).toContain("Atlas Dental Group");
-    expect(row).toContain("Megan Jacobs");
+    expect(row).toContain("Jane Demo");
     expect(row).toContain("APPROVED");
   });
 });
@@ -38,8 +38,8 @@ describe("buildCompanySheetRow", () => {
       companyName: "Atlas Dental Group",
       industry: "Dental Clinics",
       locationSummary: "Cape Town, South Africa",
-      website: "https://atlasdental.co.za",
-      phone: "+27 21 555 0133",
+      website: "https://demo-dental.invalid",
+      phone: "+1 555 000 0000",
       status: "READY",
       scoreLabel: "79 / 100",
       leadUrl: "http://localhost:3000/leads/company-1",

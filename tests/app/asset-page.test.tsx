@@ -63,8 +63,8 @@ describe("AssetPage", () => {
           sequenceStep: 1,
           contact: {
             firstName: "Megan",
-            fullName: "Megan Jacobs",
-            email: "megan@atlasdental.co.za",
+            fullName: "Jane Demo",
+            email: "jane@demo-dental.invalid",
           },
           company: { name: "Atlas Dental Group" },
         },

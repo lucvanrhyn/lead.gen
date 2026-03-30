@@ -23,7 +23,7 @@ describe("hubspot client payload builders", () => {
     expect(
       buildHubSpotCompanySearchPayload({
         name: "Atlas Dental Group",
-        normalizedDomain: "atlasdental.co.za",
+        normalizedDomain: "demo-dental.invalid",
       }),
     ).toEqual({
       filterGroups: [
@@ -32,7 +32,7 @@ describe("hubspot client payload builders", () => {
             {
               propertyName: "domain",
               operator: "EQ",
-              value: "atlasdental.co.za",
+              value: "demo-dental.invalid",
             },
           ],
         },
@@ -46,17 +46,17 @@ describe("hubspot client payload builders", () => {
     expect(
       buildHubSpotCompanyUpsertPayload({
         name: "Atlas Dental Group",
-        website: "https://atlasdental.co.za",
-        normalizedDomain: "atlasdental.co.za",
-        phone: "+27 21 555 0133",
+        website: "https://demo-dental.invalid",
+        normalizedDomain: "demo-dental.invalid",
+        phone: "+1 555 000 0000",
         industry: "Dental Clinics",
       }),
     ).toEqual({
       properties: {
         name: "Atlas Dental Group",
-        domain: "atlasdental.co.za",
-        website: "https://atlasdental.co.za",
-        phone: "+27 21 555 0133",
+        domain: "demo-dental.invalid",
+        website: "https://demo-dental.invalid",
+        phone: "+1 555 000 0000",
         industry: "Dental Clinics",
       },
     });
@@ -65,7 +65,7 @@ describe("hubspot client payload builders", () => {
   it("builds a contact search payload from email", () => {
     expect(
       buildHubSpotContactSearchPayload({
-        email: "megan@atlasdental.co.za",
+        email: "jane@demo-dental.invalid",
       }),
     ).toEqual({
       filterGroups: [
@@ -74,7 +74,7 @@ describe("hubspot client payload builders", () => {
             {
               propertyName: "email",
               operator: "EQ",
-              value: "megan@atlasdental.co.za",
+              value: "jane@demo-dental.invalid",
             },
           ],
         },
@@ -87,14 +87,14 @@ describe("hubspot client payload builders", () => {
   it("builds a contact upsert payload with split names and role details", () => {
     expect(
       buildHubSpotContactUpsertPayload({
-        fullName: "Megan Jacobs",
-        email: "megan@atlasdental.co.za",
+        fullName: "Jane Demo",
+        email: "jane@demo-dental.invalid",
         title: "Practice Manager",
         phone: "+27 82 555 0199",
       }),
     ).toEqual({
       properties: {
-        email: "megan@atlasdental.co.za",
+        email: "jane@demo-dental.invalid",
         firstname: "Megan",
         lastname: "Jacobs",
         jobtitle: "Practice Manager",
@@ -117,8 +117,8 @@ describe("hubspot client payload builders", () => {
       },
       contact: {
         id: "contact-1",
-        fullName: "Megan Jacobs",
-        email: "megan@atlasdental.co.za",
+        fullName: "Jane Demo",
+        email: "jane@demo-dental.invalid",
       },
       event: {
         id: "event-1",
@@ -131,7 +131,7 @@ describe("hubspot client payload builders", () => {
     });
 
     expect(payload.properties.hs_note_body).toContain("Atlas Dental Group");
-    expect(payload.properties.hs_note_body).toContain("Megan Jacobs");
+    expect(payload.properties.hs_note_body).toContain("Jane Demo");
     expect(payload.properties.hs_note_body).toContain("CLICK");
     expect(payload.properties.hs_note_body).toContain("draft-1");
     expect(payload.properties.hs_note_body).toContain("https://example.com/assets/atlas-demo");
@@ -167,15 +167,15 @@ describe("syncOutreachDraftToHubSpot", () => {
         company: {
           id: "company-1",
           name: "Atlas Dental Group",
-          website: "https://atlasdental.co.za",
-          normalizedDomain: "atlasdental.co.za",
-          phone: "+27 21 555 0133",
+          website: "https://demo-dental.invalid",
+          normalizedDomain: "demo-dental.invalid",
+          phone: "+1 555 000 0000",
           industry: "Dental Clinics",
         },
         contact: {
           id: "contact-1",
-          fullName: "Megan Jacobs",
-          email: "megan@atlasdental.co.za",
+          fullName: "Jane Demo",
+          email: "jane@demo-dental.invalid",
           title: "Practice Manager",
           phone: "+27 82 555 0199",
         },
@@ -221,7 +221,7 @@ describe("syncOutreachDraftToHubSpot", () => {
             {
               propertyName: "domain",
               operator: "EQ",
-              value: "atlasdental.co.za",
+              value: "demo-dental.invalid",
             },
           ],
         },
@@ -232,9 +232,9 @@ describe("syncOutreachDraftToHubSpot", () => {
     expect(JSON.parse(fetchMock.mock.calls[1]?.[1]?.body as string)).toMatchObject({
       properties: {
         name: "Atlas Dental Group",
-        domain: "atlasdental.co.za",
-        website: "https://atlasdental.co.za",
-        phone: "+27 21 555 0133",
+        domain: "demo-dental.invalid",
+        website: "https://demo-dental.invalid",
+        phone: "+1 555 000 0000",
         industry: "Dental Clinics",
       },
     });

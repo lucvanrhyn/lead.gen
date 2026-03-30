@@ -43,7 +43,7 @@ describe("create gmail draft route", () => {
       emailSubject1: "A quick idea for Atlas Dental bookings",
       coldEmailMedium: "Hello Megan",
       contact: {
-        email: "megan@atlasdental.co.za",
+        email: "jane@demo-dental.invalid",
       },
       gmailDraftLink: null,
       leadMagnetAsset: {

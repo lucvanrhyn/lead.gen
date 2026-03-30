@@ -90,13 +90,13 @@ describe("diagnostic form response sync route", () => {
       id: "lead-1",
       industry: "Dental Clinics",
       employeeCount: 48,
-      website: "https://atlasdental.co.za",
-      phone: "+27 21 555 0133",
+      website: "https://demo-dental.invalid",
+      phone: "+1 555 000 0000",
       locationSummary: "Cape Town, South Africa",
       contacts: [
         {
-          email: "megan@atlasdental.co.za",
-          phone: "+27 21 555 0133",
+          email: "jane@demo-dental.invalid",
+          phone: "+1 555 000 0000",
           decisionMakerConfidence: 0.82,
         },
       ],

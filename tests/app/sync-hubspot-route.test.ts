@@ -52,17 +52,17 @@ describe("sync hubspot route", () => {
       company: {
         id: "company-1",
         name: "Atlas Dental Group",
-        website: "https://atlasdental.co.za",
-        normalizedDomain: "atlasdental.co.za",
-        phone: "+27 21 555 0133",
+        website: "https://demo-dental.invalid",
+        normalizedDomain: "demo-dental.invalid",
+        phone: "+1 555 000 0000",
         industry: "Dental Clinics",
       },
       contact: {
         id: "contact-1",
-        fullName: "Megan Jacobs",
+        fullName: "Jane Demo",
         firstName: "Megan",
         lastName: "Jacobs",
-        email: "megan@atlasdental.co.za",
+        email: "jane@demo-dental.invalid",
         title: "Practice Manager",
         phone: "+27 82 555 0199",
       },
@@ -110,7 +110,7 @@ describe("sync hubspot route", () => {
           name: "Atlas Dental Group",
         }),
         contact: expect.objectContaining({
-          email: "megan@atlasdental.co.za",
+          email: "jane@demo-dental.invalid",
         }),
         event: expect.objectContaining({
           id: "event-1",

@@ -27,6 +27,8 @@
 .DS_Store
 *.pem
 codex_scaffold_tmp
+codex_lead_generator_pack_apollo_first/
+codex_lead_generator_pack_apollo_first.zip
 
 # debug
 npm-debug.log*

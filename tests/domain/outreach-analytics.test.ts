@@ -10,7 +10,7 @@ describe("deriveOutreachSuppressionReason", () => {
     const result = deriveOutreachSuppressionReason({
       companyId: "company-1",
       contactId: "contact-1",
-      contactEmail: "megan@atlasdental.co.za",
+      contactEmail: "jane@demo-dental.invalid",
       recentDrafts: [
         {
           id: "draft-1",
@@ -33,7 +33,7 @@ describe("deriveOutreachSuppressionReason", () => {
     const result = deriveOutreachSuppressionReason({
       companyId: "company-1",
       contactId: "contact-2",
-      contactEmail: "ops@atlasdental.co.za",
+      contactEmail: "ops@demo-dental.invalid",
       recentDrafts: [
         {
           id: "draft-1",
@@ -56,7 +56,7 @@ describe("deriveOutreachSuppressionReason", () => {
     const result = deriveOutreachSuppressionReason({
       companyId: "company-1",
       contactId: "contact-2",
-      contactEmail: "ops@atlasdental.co.za",
+      contactEmail: "ops@demo-dental.invalid",
       recentDrafts: [],
       engagementEvents: [
         {

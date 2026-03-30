@@ -9,9 +9,9 @@ describe("normalizeApolloOrganization", () => {
       organization: {
         id: "apollo-org-1",
         name: "Atlas Dental Group",
-        website_url: "https://atlasdental.co.za",
-        phone: "+27 21 555 0133",
-        primary_domain: "atlasdental.co.za",
+        website_url: "https://demo-dental.invalid",
+        phone: "+1 555 000 0000",
+        primary_domain: "demo-dental.invalid",
         industry: "Hospital & Health Care",
         estimated_num_employees: 48,
         short_description: "Multi-location dental clinics.",
@@ -23,10 +23,10 @@ describe("normalizeApolloOrganization", () => {
     expect(normalized).toMatchObject({
       apolloOrganizationId: "apollo-org-1",
       name: "Atlas Dental Group",
-      website: "https://atlasdental.co.za",
+      website: "https://demo-dental.invalid",
       industry: "Hospital & Health Care",
       employeeCount: 48,
-      phone: "+27 21 555 0133",
+      phone: "+1 555 000 0000",
     });
   });
 });
@@ -36,7 +36,7 @@ describe("enrichApolloCompanyAndContacts", () => {
     await expect(
       enrichApolloCompanyAndContacts(
         {
-          domain: "atlasdental.co.za",
+          domain: "demo-dental.invalid",
         },
         {
           apiKey: "",
@@ -55,7 +55,7 @@ describe("enrichApolloCompanyAndContacts", () => {
             organization: {
               id: "apollo-org-1",
               name: "Atlas Dental Group",
-              website_url: "https://atlasdental.co.za",
+              website_url: "https://demo-dental.invalid",
               industry: "Hospital & Health Care",
               estimated_num_employees: 48,
               city: "Cape Town",
@@ -73,7 +73,7 @@ describe("enrichApolloCompanyAndContacts", () => {
                 id: "apollo-person-1",
                 first_name: "Megan",
                 last_name: "Jacobs",
-                name: "Megan Jacobs",
+                name: "Jane Demo",
                 title: "Practice Manager",
                 seniority: "manager",
               },
@@ -90,10 +90,10 @@ describe("enrichApolloCompanyAndContacts", () => {
                 id: "apollo-person-1",
                 first_name: "Megan",
                 last_name: "Jacobs",
-                name: "Megan Jacobs",
+                name: "Jane Demo",
                 title: "Practice Manager",
-                email: "megan@atlasdental.co.za",
-                phone_numbers: [{ raw_number: "+27 21 555 0133" }],
+                email: "jane@demo-dental.invalid",
+                phone_numbers: [{ raw_number: "+1 555 000 0000" }],
                 departments: ["operations"],
                 seniority: "manager",
               },
@@ -105,7 +105,7 @@ describe("enrichApolloCompanyAndContacts", () => {
 
     const result = await enrichApolloCompanyAndContacts(
       {
-        domain: "atlasdental.co.za",
+        domain: "demo-dental.invalid",
         companyName: "Atlas Dental Group",
       },
       {
@@ -118,8 +118,8 @@ describe("enrichApolloCompanyAndContacts", () => {
     expect(result.contacts).toHaveLength(1);
     expect(result.contacts[0]).toMatchObject({
       apolloPersonId: "apollo-person-1",
-      fullName: "Megan Jacobs",
-      email: "megan@atlasdental.co.za",
+      fullName: "Jane Demo",
+      email: "jane@demo-dental.invalid",
     });
   });
 
@@ -132,7 +132,7 @@ describe("enrichApolloCompanyAndContacts", () => {
             organization: {
               id: "apollo-org-1",
               name: "Atlas Dental Group",
-              website_url: "https://atlasdental.co.za",
+              website_url: "https://demo-dental.invalid",
               industry: "Hospital & Health Care",
               estimated_num_employees: 48,
               city: "Cape Town",
@@ -155,7 +155,7 @@ describe("enrichApolloCompanyAndContacts", () => {
 
     const result = await enrichApolloCompanyAndContacts(
       {
-        domain: "atlasdental.co.za",
+        domain: "demo-dental.invalid",
         companyName: "Atlas Dental Group",
       },
       {

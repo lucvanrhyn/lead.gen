@@ -36,7 +36,7 @@ describe("buildOutreachDraft", () => {
   it("creates a manual linkedin task with lookup-needed guidance", () => {
     const task = buildLinkedInTask({
       companyName: "Atlas Dental Group",
-      contactName: "Megan Jacobs",
+      contactName: "Jane Demo",
       contactTitle: "Practice Manager",
       leadMagnetTitle: "Atlas Dental Booking Funnel Teardown",
       linkedinMessageSafe:

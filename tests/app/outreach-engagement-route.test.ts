@@ -45,7 +45,7 @@ describe("outreach engagement route", () => {
       gmailDraftLink: { syncStatus: "SYNCED" },
       emailSubject1: "Atlas Dental Booking Funnel Teardown",
       company: { name: "Atlas Dental Group" },
-      contact: { firstName: "Megan", fullName: "Megan Jacobs" },
+      contact: { firstName: "Megan", fullName: "Jane Demo" },
       childDrafts: [],
     });
     createEvent.mockResolvedValueOnce({ id: "event-1", type: "CLICK" });
@@ -82,7 +82,7 @@ describe("outreach engagement route", () => {
       gmailDraftLink: { syncStatus: "SYNCED" },
       emailSubject1: "Atlas Dental Booking Funnel Teardown",
       company: { name: "Atlas Dental Group" },
-      contact: { firstName: "Megan", fullName: "Megan Jacobs" },
+      contact: { firstName: "Megan", fullName: "Jane Demo" },
       childDrafts: [{ id: "draft-2", draftType: "FOLLOW_UP" }],
     });
     createEvent.mockResolvedValueOnce({ id: "event-1", type: "ASSET_VIEW" });
@@ -113,7 +113,7 @@ describe("outreach engagement route", () => {
       gmailDraftLink: { syncStatus: "READY" },
       emailSubject1: "Atlas Dental Booking Funnel Teardown",
       company: { name: "Atlas Dental Group" },
-      contact: { firstName: "Megan", fullName: "Megan Jacobs" },
+      contact: { firstName: "Megan", fullName: "Jane Demo" },
       childDrafts: [],
     });
 

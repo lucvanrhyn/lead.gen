@@ -15,21 +15,21 @@ const prisma = createPrismaClient();
 const demoGraph = companySeedGraphSchema.parse({
   company: {
     name: "Atlas Dental Group",
-    website: "https://atlasdental.co.za",
+    website: "https://demo-dental.invalid",
     industry: "Dental Clinics",
     location: "Cape Town, South Africa",
   },
   contacts: [
     {
-      fullName: "Megan Jacobs",
+      fullName: "Jane Demo",
       title: "Practice Manager",
-      email: "megan@atlasdental.co.za",
-      phone: "+27 21 555 0133",
+      email: "jane@demo-dental.invalid",
+      phone: "+1 555 000 0000",
     },
   ],
   sourceEvent: {
     provider: "manual_seed",
-    url: "https://atlasdental.co.za",
+    url: "https://demo-dental.invalid",
     confidence: 0.92,
   },
 });
@@ -62,8 +62,8 @@ async function main() {
     data: {
       name: demoGraph.company.name,
       website: demoGraph.company.website,
-      phone: "+27 21 555 0133",
-      normalizedDomain: "atlasdental.co.za",
+      phone: "+1 555 000 0000",
+      normalizedDomain: "demo-dental.invalid",
       industry: demoGraph.company.industry,
       locationSummary: demoGraph.company.location,
       employeeCount: 48,
@@ -125,7 +125,7 @@ async function main() {
             provider: SourceProvider.BUILTWITH,
             technologyName: "Cloudflare",
             category: "Infrastructure",
-            evidenceUrl: "https://atlasdental.co.za",
+            evidenceUrl: "https://demo-dental.invalid",
             confidence: 0.61,
           },
         ],
@@ -135,7 +135,7 @@ async function main() {
           {
             provider: SourceProvider.FIRECRAWL,
             pageType: CrawlPageType.HOMEPAGE,
-            url: "https://atlasdental.co.za",
+            url: "https://demo-dental.invalid",
             title: "Atlas Dental Group",
             markdown:
               "Family dentistry, implants, same-week bookings, and cosmetic smile packages.",
@@ -156,7 +156,7 @@ async function main() {
             evidence: [
               {
                 source_type: "website",
-                source_url: "https://atlasdental.co.za",
+                source_url: "https://demo-dental.invalid",
                 snippet: "same-week bookings and cosmetic smile packages",
                 signal_type: "conversion_signal",
                 confidence: 0.78,
@@ -261,11 +261,11 @@ async function main() {
         contactName: company.contacts[0].fullName,
         contactTitle: company.contacts[0].title,
         lookupHints: [
-          "Megan Jacobs Atlas Dental Group LinkedIn",
+          "Jane Demo Atlas Dental Group LinkedIn",
           "Practice Manager Atlas Dental Group LinkedIn",
         ],
         connectionRequestNote:
-          "Megan Jacobs, I put together a short Atlas Dental Booking Funnel Teardown after spotting a likely booking leak at Atlas Dental.",
+          "Jane Demo, I put together a short Atlas Dental Booking Funnel Teardown after spotting a likely booking leak at Atlas Dental.",
         dmMessage:
           "I put together a short teardown on how Atlas Dental could tighten the path from treatment-page visits to booked consults. Happy to send it over if helpful.",
         followUpDm:
@@ -348,11 +348,11 @@ async function main() {
         contactName: company.contacts[0].fullName,
         contactTitle: company.contacts[0].title,
         lookupHints: [
-          "Megan Jacobs Atlas Dental Group LinkedIn",
+          "Jane Demo Atlas Dental Group LinkedIn",
           "Practice Manager Atlas Dental Group LinkedIn",
         ],
         connectionRequestNote:
-          "Megan Jacobs, I put together a short Atlas Dental workflow diagnostic after spotting a likely friction point at Atlas Dental.",
+          "Jane Demo, I put together a short Atlas Dental workflow diagnostic after spotting a likely friction point at Atlas Dental.",
         dmMessage:
           "I made a quick booking workflow diagnostic for Atlas Dental. Happy to send it over if useful.",
         followUpDm:

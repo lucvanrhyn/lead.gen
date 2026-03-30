@@ -31,7 +31,7 @@ import {
 describe("buildGmailDraftRawMessage", () => {
   it("builds a base64url encoded MIME message for a draft", () => {
     const raw = buildGmailDraftRawMessage({
-      to: "megan@atlasdental.co.za",
+      to: "jane@demo-dental.invalid",
       subject: "A quick idea for Atlas Dental bookings",
       body: "Hello Megan",
     });
@@ -42,7 +42,7 @@ describe("buildGmailDraftRawMessage", () => {
       "utf8",
     );
 
-    expect(decoded).toContain("To: megan@atlasdental.co.za");
+    expect(decoded).toContain("To: jane@demo-dental.invalid");
     expect(decoded).toContain("Subject: A quick idea for Atlas Dental bookings");
     expect(decoded).toContain("Hello Megan");
   });
@@ -86,7 +86,7 @@ describe("fetchGoogleWorkspaceGmailThread", () => {
             payload: {
               headers: [
                 { name: "From", value: "Operator <operator@studio.example>" },
-                { name: "To", value: "Megan Jacobs <megan@atlasdental.co.za>" },
+                { name: "To", value: "Jane Demo <jane@demo-dental.invalid>" },
                 { name: "Subject", value: "A quick idea for Atlas Dental bookings" },
                 { name: "Message-ID", value: "<message-1@studio.example>" },
               ],
@@ -100,12 +100,12 @@ describe("fetchGoogleWorkspaceGmailThread", () => {
             snippet: "Sounds interesting",
             payload: {
               headers: [
-                { name: "From", value: "Megan Jacobs <megan@atlasdental.co.za>" },
+                { name: "From", value: "Jane Demo <jane@demo-dental.invalid>" },
                 { name: "To", value: "Operator <operator@studio.example>" },
                 { name: "Subject", value: "Re: A quick idea for Atlas Dental bookings" },
                 { name: "In-Reply-To", value: "<message-1@studio.example>" },
                 { name: "References", value: "<message-1@studio.example>" },
-                { name: "Message-ID", value: "<message-2@atlasdental.co.za>" },
+                { name: "Message-ID", value: "<message-2@demo-dental.invalid>" },
               ],
             },
           },
@@ -144,7 +144,7 @@ describe("fetchGoogleWorkspaceGmailThread", () => {
       id: "message-2",
       direction: "INBOUND",
       isReply: true,
-      fromEmail: "megan@atlasdental.co.za",
+      fromEmail: "jane@demo-dental.invalid",
     });
   });
 });
