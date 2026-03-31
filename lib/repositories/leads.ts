@@ -336,7 +336,9 @@ export async function getLeadSummaries(input?: {
 
   const where = {
     ...(excludeArchived ? { status: { not: CompanyStatus.ARCHIVED } } : {}),
-    ...(input?.industry ? { industry: input.industry } : {}),
+    ...(input?.industry
+      ? { industry: { equals: input.industry, mode: "insensitive" as const } }
+      : {}),
     NOT: { name: "Unknown company" },
   };
 
