@@ -1,4 +1,4 @@
-import { ApprovalStatus, EnrichmentStage, ExternalSyncStatus, JobStatus } from "@prisma/client";
+import { ApprovalStatus, CompanyStatus, EnrichmentStage, ExternalSyncStatus, JobStatus } from "@prisma/client";
 import { buildCampaignAnalytics } from "@/lib/ai/outreach";
 import { db } from "@/lib/db";
 import {
@@ -11,6 +11,7 @@ import {
   type ApprovalQueueItem,
   type ApprovalQueueSummary,
   type CampaignAnalytics,
+  type IndustrySummary,
   type LeadTablePagination,
   type GoogleWorkspaceStatusViewModel,
   type LeadDetailViewModel,
@@ -295,21 +296,56 @@ function buildLeadPipeline(company: {
   };
 }
 
+export async function getIndustrySummaries(): Promise<IndustrySummary[]> {
+  try {
+    const rows = await db.company.groupBy({
+      by: ["industry"],
+      where: {
+        status: { not: CompanyStatus.ARCHIVED },
+        NOT: { name: "Unknown company" },
+        industry: { not: null },
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+    });
+
+    return rows
+      .filter((row) => row.industry != null)
+      .map((row) => ({
+        industry: row.industry as string,
+        slug: encodeURIComponent((row.industry as string).toLowerCase().replace(/\s+/g, "-")),
+        leadCount: row._count.id,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getLeadSummaries(input?: {
   page?: number;
   pageSize?: number;
+  industry?: string;
+  excludeArchived?: boolean;
 }): Promise<{
   leads: LeadTableRow[];
   pagination: LeadTablePagination;
 }> {
   const requestedPage = Math.max(1, input?.page ?? 1);
   const pageSize = Math.max(1, Math.min(input?.pageSize ?? 10, 50));
+  const excludeArchived = input?.excludeArchived !== false;
+
+  const where = {
+    ...(excludeArchived ? { status: { not: CompanyStatus.ARCHIVED } } : {}),
+    ...(input?.industry ? { industry: input.industry } : {}),
+    NOT: { name: "Unknown company" },
+  };
 
   try {
-    const totalCount = await db.company.count();
+    const totalCount = await db.company.count({ where });
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
     const page = Math.min(requestedPage, totalPages);
     const companies = await db.company.findMany({
+      where,
       orderBy: {
         updatedAt: "desc",
       },

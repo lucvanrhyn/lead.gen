@@ -14,6 +14,12 @@ export type LeadTableRow = {
   approvalStatus?: string;
 };
 
+export type IndustrySummary = {
+  industry: string;
+  slug: string;
+  leadCount: number;
+};
+
 export type LeadTablePagination = {
   page: number;
   totalPages: number;

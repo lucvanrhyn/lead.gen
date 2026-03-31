@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Activity, Linkedin, Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
+import { Activity, Archive, Linkedin, Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
 
 import { ManualReviewToggle } from "@/components/leads/manual-review-toggle";
 import { PipelineActions } from "@/components/leads/pipeline-actions";
@@ -27,6 +27,13 @@ type TabId = (typeof tabs)[number]["id"];
 export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("company");
+  const [archiving, setArchiving] = useState(false);
+
+  async function handleArchive() {
+    setArchiving(true);
+    await fetch(`/api/leads/${lead.company.id}/archive`, { method: "POST" });
+    router.push("/leads");
+  }
   const [engagementMessage, setEngagementMessage] = useState<string | null>(null);
   const [engagementError, setEngagementError] = useState<string | null>(null);
   const [pendingEngagementDraftId, setPendingEngagementDraftId] = useState<string | null>(null);
@@ -138,10 +145,20 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
             </div>
           </div>
 
-          <ManualReviewToggle
-            initialValue={lead.company.manualReviewRequired}
-            leadId={lead.company.id}
-          />
+          <div className="flex flex-col gap-3">
+            <ManualReviewToggle
+              initialValue={lead.company.manualReviewRequired}
+              leadId={lead.company.id}
+            />
+            <button
+              disabled={archiving}
+              onClick={handleArchive}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-[rgba(22,32,51,0.12)] px-5 py-3 text-sm text-[rgba(22,32,51,0.6)] transition hover:bg-[rgba(22,32,51,0.06)] disabled:opacity-40"
+            >
+              <Archive className="h-4 w-4" />
+              {archiving ? "Archiving…" : "Archive lead"}
+            </button>
+          </div>
         </div>
       </section>
 

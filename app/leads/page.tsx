@@ -5,12 +5,12 @@ import { after } from "next/server";
 import { ApprovalQueue } from "@/components/leads/approval-queue";
 import { DiscoveryForm } from "@/components/leads/discovery-form";
 import { GoogleWorkspaceStatus } from "@/components/leads/google-workspace-status";
-import { LeadTable } from "@/components/leads/lead-table";
+import { IndustryList } from "@/components/leads/industry-list";
 import { dispatchDiscoveryProcessing } from "@/lib/jobs/dispatch";
 import {
   getApprovalQueue,
   getGoogleWorkspaceStatus,
-  getLeadSummaries,
+  getIndustrySummaries,
 } from "@/lib/repositories/leads";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,6 @@ export default async function LeadsPage({
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
   const origin = host ? `${protocol}://${host}` : undefined;
   const params = await searchParams;
-  const page = Number(params.page ?? "1");
   const workspaceNotice =
     params.workspace === "connected"
       ? {
@@ -38,10 +37,8 @@ export default async function LeadsPage({
             message: getWorkspaceErrorMessage(params.reason),
           }
         : undefined;
-  const [leadTable, approvalQueue, workspace] = await Promise.all([
-    getLeadSummaries({
-      page: Number.isFinite(page) ? page : 1,
-    }),
+  const [industries, approvalQueue, workspace] = await Promise.all([
+    getIndustrySummaries(),
     getApprovalQueue(),
     getGoogleWorkspaceStatus(),
   ]);
@@ -81,7 +78,7 @@ export default async function LeadsPage({
           workspaceConnected={workspace.status === "CONNECTED"}
           campaignAnalytics={approvalQueue.campaignAnalytics}
         />
-        <LeadTable leads={leadTable.leads} pagination={leadTable.pagination} />
+        <IndustryList industries={industries} />
       </div>
     </main>
   );

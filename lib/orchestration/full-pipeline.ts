@@ -31,6 +31,7 @@ import {
   extractEmailsFromPages,
   persistContactsFromCrawl,
 } from "@/lib/providers/firecrawl/client";
+import { runEmailDiscoveryCascade } from "@/lib/orchestration/email-cascade";
 
 type StageResult = {
   stage: string;
@@ -165,6 +166,7 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
+    let crawlEmails: string[] = [];
     try {
       if (refreshedCompany.website) {
         const crawlResult = await extractLeadWebsitePages(
@@ -176,7 +178,7 @@ export async function runCompanyFullPipeline(companyId: string) {
         );
         // Extract emails from crawled pages as a fallback when Apollo People Search
         // is unavailable — ensures contacts exist even without a full Apollo plan.
-        const crawlEmails = extractEmailsFromPages(crawlResult.pages);
+        crawlEmails = extractEmailsFromPages(crawlResult.pages);
         await persistContactsFromCrawl(refreshedCompany.id, crawlEmails);
         stages.push({ stage: "crawl", status: JobStatus.SUCCEEDED });
       } else {
@@ -198,6 +200,30 @@ export async function runCompanyFullPipeline(companyId: string) {
         error: message,
       });
     }
+
+    // Email discovery cascade: Firecrawl → Hunter.io → Google Places phone fallback
+    const cascadeDomain =
+      refreshedCompany.normalizedDomain ??
+      (refreshedCompany.website
+        ? new URL(refreshedCompany.website).hostname.replace(/^www\./, "")
+        : null);
+    const cascadeResult = await runEmailDiscoveryCascade({
+      companyId,
+      domain: cascadeDomain,
+      companyName: refreshedCompany.name,
+      crawlEmails,
+      existingContacts: refreshedCompany.contacts.map((c) => ({
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+      })),
+      phone: refreshedCompany.phone ?? null,
+    });
+    stages.push({
+      stage: "email_cascade",
+      status: cascadeResult.contactsCreated > 0 ? JobStatus.SUCCEEDED : JobStatus.PARTIAL,
+      error: cascadeResult.warnings.length > 0 ? cascadeResult.warnings.join("; ") : undefined,
+    });
 
     const companyWithEvidence = await db.company.findUnique({
       where: { id: companyId },
