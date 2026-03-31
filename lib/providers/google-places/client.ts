@@ -222,7 +222,8 @@ export async function searchGooglePlaces(
           searchPlace: place,
           detailPlace,
         });
-      } catch {
+      } catch (error) {
+        console.warn("[google-places] Failed to fetch place details for", place.name, ":", error);
         return normalizeGooglePlaceCandidate({
           searchPlace: place,
         });

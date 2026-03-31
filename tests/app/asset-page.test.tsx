@@ -25,6 +25,7 @@ vi.mock("@/lib/db", () => ({
       create: createEvent,
     },
     outreachDraft: {
+      findMany: vi.fn().mockResolvedValue([]),
       create: createFollowUp,
     },
   },

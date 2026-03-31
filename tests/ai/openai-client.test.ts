@@ -160,6 +160,88 @@ describe("callOpenAiResponsesApi", () => {
     ).rejects.toThrow(/did not contain structured output/);
   });
 
+  it("uses light model tier defaulting to gpt-4o-mini", async () => {
+    const originalLight = process.env.OPENAI_LIGHT_MODEL;
+    delete process.env.OPENAI_LIGHT_MODEL;
+
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ output_text: '{"name":"L","score":0}' }), {
+        status: 200,
+      }),
+    );
+
+    await callOpenAiResponsesApi({
+      modelTier: "light",
+      systemPrompt: "test",
+      userContent: "test",
+      jsonSchemaName: "test_schema",
+      jsonSchema: testJsonSchema,
+      zodSchema: testSchema,
+      apiKey: "test-key",
+      fetchFn,
+    });
+
+    const calledBody = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(calledBody.model).toBe("gpt-4o-mini");
+
+    process.env.OPENAI_LIGHT_MODEL = originalLight;
+  });
+
+  it("uses OPENAI_LIGHT_MODEL env var when modelTier is light", async () => {
+    const originalLight = process.env.OPENAI_LIGHT_MODEL;
+    process.env.OPENAI_LIGHT_MODEL = "gpt-4o-mini-custom";
+
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ output_text: '{"name":"L","score":0}' }), {
+        status: 200,
+      }),
+    );
+
+    await callOpenAiResponsesApi({
+      modelTier: "light",
+      systemPrompt: "test",
+      userContent: "test",
+      jsonSchemaName: "test_schema",
+      jsonSchema: testJsonSchema,
+      zodSchema: testSchema,
+      apiKey: "test-key",
+      fetchFn,
+    });
+
+    const calledBody = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(calledBody.model).toBe("gpt-4o-mini-custom");
+
+    process.env.OPENAI_LIGHT_MODEL = originalLight;
+  });
+
+  it("envModelKey overrides light model tier", async () => {
+    const originalEnv = process.env.OPENAI_MODEL_QA;
+    process.env.OPENAI_MODEL_QA = "gpt-4o-override";
+
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ output_text: '{"name":"O","score":0}' }), {
+        status: 200,
+      }),
+    );
+
+    await callOpenAiResponsesApi({
+      envModelKey: "OPENAI_MODEL_QA",
+      modelTier: "light",
+      systemPrompt: "test",
+      userContent: "test",
+      jsonSchemaName: "test_schema",
+      jsonSchema: testJsonSchema,
+      zodSchema: testSchema,
+      apiKey: "test-key",
+      fetchFn,
+    });
+
+    const calledBody = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(calledBody.model).toBe("gpt-4o-override");
+
+    process.env.OPENAI_MODEL_QA = originalEnv;
+  });
+
   it("uses envModelKey to resolve model", async () => {
     process.env.TEST_MODEL = "gpt-4o-mini";
 

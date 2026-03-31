@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { checkRateLimit, getClientIp } from "@/lib/middleware/rate-limit";
 import { processQueuedDiscoveryJobs } from "@/lib/jobs/worker";
 import { createDiscoveryBatch } from "@/lib/orchestration/discovery-batch";
 
@@ -12,7 +13,31 @@ const discoveryRequestSchema = z.object({
   autoRunPipeline: z.boolean().optional(),
 });
 
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60_000;
+
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const { allowed, remaining, resetAt } = checkRateLimit(
+    `discovery:search:${ip}`,
+    RATE_LIMIT,
+    RATE_WINDOW_MS,
+  );
+
+  if (!allowed) {
+    const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
+    return NextResponse.json(
+      { error: "Too many requests", retryAfter },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(retryAfter),
+          "X-RateLimit-Remaining": "0",
+        },
+      },
+    );
+  }
+
   try {
     const json = await request.json();
     const input = discoveryRequestSchema.parse(json);
@@ -28,7 +53,9 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json(result);
+    const response = NextResponse.json(result);
+    response.headers.set("X-RateLimit-Remaining", String(remaining));
+    return response;
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

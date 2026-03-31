@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { LeadTable } from "@/components/leads/lead-table";
 import { getLeadSummaries } from "@/lib/repositories/leads";
 
@@ -26,6 +27,12 @@ export default async function IndustryLeadsPage({
     <main className="page-frame min-h-screen px-6 py-8 sm:px-10 lg:px-12">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
         <div className="dashboard-panel flex flex-col gap-4 rounded-[3rem] p-8">
+          <Breadcrumbs
+            items={[
+              { label: "Leads", href: "/leads" },
+              { label: industry },
+            ]}
+          />
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="dashboard-eyebrow">Industry</p>

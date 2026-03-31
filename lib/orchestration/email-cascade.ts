@@ -7,6 +7,7 @@ import {
   hunterVerifyEmail,
   persistContactsFromHunter,
 } from "@/lib/providers/hunter/client";
+import { isDisposableEmail } from "@/lib/domain/email-validation";
 
 export type EmailCascadeResult = {
   source: "firecrawl" | "hunter_search" | "hunter_pattern" | "google_places_phone" | "none";
@@ -112,11 +113,21 @@ export async function runEmailDiscoveryCascade(
 ): Promise<EmailCascadeResult> {
   const warnings: string[] = [];
 
-  // Step 1: Firecrawl already ran — check if it found emails
-  if (input.crawlEmails.length > 0) {
+  // Step 0: Filter out disposable emails from crawl results
+  const disposableFound = input.crawlEmails.filter((e) => isDisposableEmail(e));
+  const validCrawlEmails = input.crawlEmails.filter((e) => !isDisposableEmail(e));
+
+  if (disposableFound.length > 0) {
+    warnings.push(
+      `Filtered ${disposableFound.length} disposable email(s): ${disposableFound.join(", ")}`,
+    );
+  }
+
+  // Step 1: Firecrawl already ran — check if it found valid (non-disposable) emails
+  if (validCrawlEmails.length > 0) {
     return {
       source: "firecrawl",
-      contactsCreated: input.crawlEmails.length,
+      contactsCreated: validCrawlEmails.length,
       hunterCreditsUsed: 0,
       pattern: null,
       flagForLinkedIn: false,
@@ -124,8 +135,8 @@ export async function runEmailDiscoveryCascade(
     };
   }
 
-  // Step 2: Try Hunter.io
-  if (input.domain) {
+  // Step 2: Try Hunter.io (skip if domain itself is disposable)
+  if (input.domain && !isDisposableEmail(`check@${input.domain}`)) {
     const cachedPattern = await getCachedHunterPattern(input.domain);
 
     if (cachedPattern === null) {
@@ -137,8 +148,12 @@ export async function runEmailDiscoveryCascade(
           const result = await hunterDomainSearch(input.domain);
           await cacheHunterResult(input.domain, result.pattern, input.companyId);
 
-          if (result.emails.length > 0) {
-            const created = await persistContactsFromHunter(input.companyId, result.emails);
+          const nonDisposableEmails = result.emails.filter(
+            (e) => !isDisposableEmail(e.email),
+          );
+
+          if (nonDisposableEmails.length > 0) {
+            const created = await persistContactsFromHunter(input.companyId, nonDisposableEmails);
             return {
               source: "hunter_search",
               contactsCreated: created,

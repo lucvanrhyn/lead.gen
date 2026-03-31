@@ -66,6 +66,47 @@ describe("extractBusinessContext", () => {
     expect(result.website_summary).toBe("No crawl data available");
   });
 
+  it("uses the light model tier (gpt-4o-mini default) for business context", async () => {
+    const originalBc = process.env.OPENAI_MODEL_BUSINESS_CONTEXT;
+    const originalLight = process.env.OPENAI_LIGHT_MODEL;
+    delete process.env.OPENAI_MODEL_BUSINESS_CONTEXT;
+    delete process.env.OPENAI_LIGHT_MODEL;
+
+    const mockPayload = {
+      website_summary: "Test company.",
+      services_offerings: ["Service A"],
+      customer_type: "b2b",
+      weak_lead_capture_signals: [],
+      operational_clues: [],
+      urgency_signals: [],
+      decision_maker_clues: [],
+      tone_brand_clues: [],
+    };
+
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(mockPayload) }] }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await extractBusinessContext(
+      {
+        companyName: "Test Co",
+        crawlPages: [{ pageType: "HOMEPAGE", url: "https://test.example/", markdown: "Test company homepage." }],
+      },
+      { apiKey: "test-key", fetchFn },
+    );
+
+    const calledBody = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(calledBody.model).toBe("gpt-4o-mini");
+
+    process.env.OPENAI_MODEL_BUSINESS_CONTEXT = originalBc;
+    process.env.OPENAI_LIGHT_MODEL = originalLight;
+  });
+
   it("calls OpenAI and parses structured response correctly", async () => {
     const mockPayload = {
       website_summary: "Sunrise Accounting provides bookkeeping services for SMEs in Cape Town.",

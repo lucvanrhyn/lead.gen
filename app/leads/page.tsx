@@ -58,12 +58,6 @@ export default async function LeadsPage({
               </p>
               <h1 className="mt-3 font-display text-5xl text-[#172033]">Lead table</h1>
             </div>
-            <Link
-              className="dashboard-secondary-button rounded-full px-5 py-3 text-sm transition hover:bg-white"
-              href="/"
-            >
-              Back to overview
-            </Link>
           </div>
           <p className="dashboard-copy max-w-3xl text-base leading-8">
             Choose an industry and region, generate a focused lead batch, then open any lead to enrich, score, create a lead magnet, and draft personalized outreach.

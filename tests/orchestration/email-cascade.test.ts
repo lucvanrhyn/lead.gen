@@ -22,6 +22,12 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
+// Mock disposable email check
+const mockIsDisposableEmail = vi.fn().mockReturnValue(false);
+vi.mock("@/lib/domain/email-validation", () => ({
+  isDisposableEmail: (...args: unknown[]) => mockIsDisposableEmail(...args),
+}));
+
 // Stub global fetch for Hunter API calls
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -373,5 +379,50 @@ describe("runEmailDiscoveryCascade", () => {
     expect(result.warnings).toContain("Hunter domain search failed");
 
     delete process.env.HUNTER_API_KEY;
+  });
+
+  // -------------------------------------------------------------------------
+  // Disposable email filtering
+  // -------------------------------------------------------------------------
+  it("filters disposable emails from crawlEmails and continues cascade", async () => {
+    // Mark the mailinator email as disposable
+    mockIsDisposableEmail.mockImplementation(
+      (email: string) => email.includes("mailinator.com"),
+    );
+
+    const result = await runEmailDiscoveryCascade(
+      baseInput({
+        crawlEmails: ["real@example.com", "fake@mailinator.com"],
+        phone: null,
+      }),
+    );
+
+    expect(result.source).toBe("firecrawl");
+    expect(result.contactsCreated).toBe(1); // Only the non-disposable email
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Filtered 1 disposable email(s)"),
+      ]),
+    );
+  });
+
+  it("falls through when ALL crawl emails are disposable", async () => {
+    mockIsDisposableEmail.mockReturnValue(true);
+
+    const result = await runEmailDiscoveryCascade(
+      baseInput({
+        crawlEmails: ["fake@mailinator.com"],
+        domain: null,
+        phone: "+1234567890",
+      }),
+    );
+
+    // Should skip firecrawl step and fall through to phone
+    expect(result.source).toBe("google_places_phone");
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Filtered 1 disposable email(s)"),
+      ]),
+    );
   });
 });

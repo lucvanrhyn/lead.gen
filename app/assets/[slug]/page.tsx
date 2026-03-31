@@ -80,13 +80,25 @@ export default async function AssetPage({
         engagementType: "ASSET_VIEW",
       });
 
+      // Find the max existing sequence step for this parent draft to avoid a
+      // unique constraint violation — the pipeline may have already created
+      // follow-up skeletons at steps 2, 3, and 4.
+      const existingFollowUps = await db.outreachDraft.findMany({
+        where: { parentDraftId: asset.outreachDraft.id },
+        select: { sequenceStep: true },
+      });
+      const maxExistingStep = existingFollowUps.reduce(
+        (max, d) => Math.max(max, d.sequenceStep),
+        asset.outreachDraft.sequenceStep,
+      );
+
       const followUpDraft = await db.outreachDraft.create({
         data: {
           companyId: asset.companyId,
           contactId: asset.outreachDraft.contactId,
           parentDraftId: asset.outreachDraft.id,
           draftType: OutreachDraftType.FOLLOW_UP,
-          sequenceStep: asset.outreachDraft.sequenceStep + 1,
+          sequenceStep: maxExistingStep + 1,
           emailSubject1: followUp.email_subject_1,
           emailSubject2: followUp.email_subject_2,
           coldEmailShort: followUp.cold_email_short,

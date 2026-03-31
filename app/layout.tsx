@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, DM_Serif_Display, Playfair_Display } from "next/font/google";
+
+import { SidebarShell } from "@/components/layout/sidebar-shell";
 import "./globals.css";
 
 const playfairDisplay = Playfair_Display({
@@ -35,7 +37,9 @@ export default function RootLayout({
       lang="en"
       className={`${playfairDisplay.variable} ${dmSans.variable} ${dmSerifDisplay.variable} h-full scroll-smooth antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <SidebarShell>{children}</SidebarShell>
+      </body>
     </html>
   );
 }

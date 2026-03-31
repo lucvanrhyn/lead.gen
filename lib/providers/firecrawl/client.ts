@@ -110,7 +110,8 @@ export function selectFirecrawlCandidatePages(baseUrl: string, mappedUrls: Firec
 
     try {
       parsed = new URL(candidateUrl);
-    } catch {
+    } catch (error) {
+      console.warn("[firecrawl] Skipping invalid URL during crawl map filtering:", candidateUrl, error);
       continue;
     }
 

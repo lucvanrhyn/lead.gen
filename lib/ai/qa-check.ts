@@ -171,6 +171,7 @@ export async function runQaCheck(
 
   return callOpenAiResponsesApi({
     envModelKey: "OPENAI_MODEL_QA",
+    modelTier: "light",
     systemPrompt: QA_SYSTEM_PROMPT,
     userContent,
     jsonSchemaName: "qa_check",

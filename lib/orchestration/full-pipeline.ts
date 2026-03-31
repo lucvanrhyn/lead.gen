@@ -8,7 +8,8 @@ import {
   type Prisma,
 } from "@prisma/client";
 
-import { extractBusinessContext, persistBusinessContext } from "@/lib/ai/business-context";
+import { persistBusinessContext } from "@/lib/ai/business-context";
+import { extractBusinessContextAndPain } from "@/lib/ai/business-context-and-pain";
 import { buildDiagnosticFormBlueprint, persistDiagnosticFormBlueprint } from "@/lib/ai/diagnostic-form";
 import { buildLeadMagnet, persistLeadMagnet } from "@/lib/ai/lead-magnet";
 import {
@@ -19,7 +20,7 @@ import {
   persistOutreachDraft,
   type OutreachSuppressionReason,
 } from "@/lib/ai/outreach";
-import { generatePainHypothesis, persistPainHypothesis } from "@/lib/ai/pain-hypothesis";
+import { persistPainHypothesis } from "@/lib/ai/pain-hypothesis";
 import { generateLeadScore, persistLeadScore, scoreLeadContext } from "@/lib/ai/lead-score";
 import { runQaCheck, persistQaCheckResult } from "@/lib/ai/qa-check";
 import { resolvePlaybook } from "@/lib/config/playbooks";
@@ -31,13 +32,17 @@ import {
   extractLeadWebsitePages,
   extractEmailsFromPages,
   persistContactsFromCrawl,
+  type NormalizedFirecrawlPage,
 } from "@/lib/providers/firecrawl/client";
+import { fetchGoogleReviews } from "@/lib/providers/google-reviews";
+import { extractPainSignals, type ReviewPainSignals } from "@/lib/domain/review-signals";
 import { runEmailDiscoveryCascade } from "@/lib/orchestration/email-cascade";
 
 type StageResult = {
   stage: string;
   status: JobStatus;
   error?: string;
+  skipped?: boolean;
 };
 
 async function persistPipelineStageOutcome(input: {
@@ -61,8 +66,9 @@ async function persistPipelineStageOutcome(input: {
         resultSummary: input.resultSummary,
       },
     });
-  } catch {
+  } catch (error) {
     // Preserve the pipeline response even if audit persistence fails.
+    console.warn("[full-pipeline] Non-fatal: Failed to persist pipeline stage outcome:", error);
   }
 }
 
@@ -102,40 +108,45 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
-    try {
-      const domain =
-        company.normalizedDomain ??
-        (company.website ? new URL(company.website).hostname.replace(/^www\./, "") : null);
+    const alreadyEnriched = company.apolloOrganizationId !== null || company.employeeCount !== null;
+    if (alreadyEnriched) {
+      stages.push({ stage: "enrich", status: JobStatus.SUCCEEDED, skipped: true });
+    } else {
+      try {
+        const domain =
+          company.normalizedDomain ??
+          (company.website ? new URL(company.website).hostname.replace(/^www\./, "") : null);
 
-      if (domain) {
-        const enrichment = await enrichApolloCompanyAndContacts(
-          {
-            domain,
-            companyName: company.name,
-            persistCompanyId: company.id,
-          },
-          { persist: true },
-        );
-        apolloWarnings = enrichment.warnings;
-        stages.push({ stage: "enrich", status: JobStatus.SUCCEEDED });
-      } else {
-        stages.push({ stage: "enrich", status: JobStatus.PARTIAL, error: "No website or domain." });
+        if (domain) {
+          const enrichment = await enrichApolloCompanyAndContacts(
+            {
+              domain,
+              companyName: company.name,
+              persistCompanyId: company.id,
+            },
+            { persist: true },
+          );
+          apolloWarnings = enrichment.warnings;
+          stages.push({ stage: "enrich", status: JobStatus.SUCCEEDED });
+        } else {
+          stages.push({ stage: "enrich", status: JobStatus.PARTIAL, error: "No website or domain." });
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Apollo enrichment failed.";
+        stages.push({
+          stage: "enrich",
+          status: JobStatus.FAILED,
+          error: message,
+        });
+        await persistPipelineStageOutcome({
+          companyId,
+          provider: SourceProvider.APOLLO,
+          stage: EnrichmentStage.APOLLO_COMPANY_ENRICHMENT,
+          status: JobStatus.FAILED,
+          error: message,
+        });
       }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Apollo enrichment failed.";
-      stages.push({
-        stage: "enrich",
-        status: JobStatus.FAILED,
-        error: message,
-      });
-      await persistPipelineStageOutcome({
-        companyId,
-        provider: SourceProvider.APOLLO,
-        stage: EnrichmentStage.APOLLO_COMPANY_ENRICHMENT,
-        status: JobStatus.FAILED,
-        error: message,
-      });
     }
 
     const refreshedCompany = await db.company.findUnique({
@@ -168,63 +179,86 @@ export async function runCompanyFullPipeline(companyId: string) {
     }
 
     let crawlEmails: string[] = [];
-    try {
-      if (refreshedCompany.website) {
-        const crawlResult = await extractLeadWebsitePages(
-          {
-            website: refreshedCompany.website,
-            persistCompanyId: refreshedCompany.id,
-          },
-          { persist: true },
-        );
-        // Extract emails from crawled pages as a fallback when Apollo People Search
-        // is unavailable — ensures contacts exist even without a full Apollo plan.
-        crawlEmails = extractEmailsFromPages(crawlResult.pages);
-        await persistContactsFromCrawl(refreshedCompany.id, crawlEmails);
-        stages.push({ stage: "crawl", status: JobStatus.SUCCEEDED });
-      } else {
-        stages.push({ stage: "crawl", status: JobStatus.PARTIAL, error: "No website available." });
+    const alreadyCrawled = refreshedCompany.crawlPages.length > 0;
+    if (alreadyCrawled) {
+      // Re-extract emails from already-crawled pages so downstream email cascade
+      // still works correctly without re-spending Firecrawl credits.
+      crawlEmails = extractEmailsFromPages(
+        refreshedCompany.crawlPages.map((p) => ({
+          pageType: p.pageType,
+          url: p.url,
+          title: p.title ?? undefined,
+          markdown: p.markdown ?? undefined,
+          confidence: p.confidence ?? 0,
+          // `raw` is not stored in the DB; extractEmailsFromPages only reads markdown
+          raw: {} as NormalizedFirecrawlPage["raw"],
+        })),
+      );
+      stages.push({ stage: "crawl", status: JobStatus.SUCCEEDED, skipped: true });
+    } else {
+      try {
+        if (refreshedCompany.website) {
+          const crawlResult = await extractLeadWebsitePages(
+            {
+              website: refreshedCompany.website,
+              persistCompanyId: refreshedCompany.id,
+            },
+            { persist: true },
+          );
+          // Extract emails from crawled pages as a fallback when Apollo People Search
+          // is unavailable — ensures contacts exist even without a full Apollo plan.
+          crawlEmails = extractEmailsFromPages(crawlResult.pages);
+          await persistContactsFromCrawl(refreshedCompany.id, crawlEmails);
+          stages.push({ stage: "crawl", status: JobStatus.SUCCEEDED });
+        } else {
+          stages.push({ stage: "crawl", status: JobStatus.PARTIAL, error: "No website available." });
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Firecrawl extraction failed.";
+        stages.push({
+          stage: "crawl",
+          status: JobStatus.FAILED,
+          error: message,
+        });
+        await persistPipelineStageOutcome({
+          companyId,
+          provider: SourceProvider.FIRECRAWL,
+          stage: EnrichmentStage.FIRECRAWL_EXTRACTION,
+          status: JobStatus.FAILED,
+          error: message,
+        });
       }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Firecrawl extraction failed.";
-      stages.push({
-        stage: "crawl",
-        status: JobStatus.FAILED,
-        error: message,
-      });
-      await persistPipelineStageOutcome({
-        companyId,
-        provider: SourceProvider.FIRECRAWL,
-        stage: EnrichmentStage.FIRECRAWL_EXTRACTION,
-        status: JobStatus.FAILED,
-        error: message,
-      });
     }
 
     // Email discovery cascade: Firecrawl → Hunter.io → Google Places phone fallback
-    const cascadeDomain =
-      refreshedCompany.normalizedDomain ??
-      (refreshedCompany.website
-        ? new URL(refreshedCompany.website).hostname.replace(/^www\./, "")
-        : null);
-    const cascadeResult = await runEmailDiscoveryCascade({
-      companyId,
-      domain: cascadeDomain,
-      companyName: refreshedCompany.name,
-      crawlEmails,
-      existingContacts: refreshedCompany.contacts.map((c) => ({
-        firstName: c.firstName,
-        lastName: c.lastName,
-        email: c.email,
-      })),
-      phone: refreshedCompany.phone ?? null,
-    });
-    stages.push({
-      stage: "email_cascade",
-      status: cascadeResult.contactsCreated > 0 ? JobStatus.SUCCEEDED : JobStatus.PARTIAL,
-      error: cascadeResult.warnings.length > 0 ? cascadeResult.warnings.join("; ") : undefined,
-    });
+    const existingEmailContacts = refreshedCompany.contacts.filter((c) => Boolean(c.email));
+    if (existingEmailContacts.length > 0) {
+      stages.push({ stage: "email_cascade", status: JobStatus.SUCCEEDED, skipped: true });
+    } else {
+      const cascadeDomain =
+        refreshedCompany.normalizedDomain ??
+        (refreshedCompany.website
+          ? new URL(refreshedCompany.website).hostname.replace(/^www\./, "")
+          : null);
+      const cascadeResult = await runEmailDiscoveryCascade({
+        companyId,
+        domain: cascadeDomain,
+        companyName: refreshedCompany.name,
+        crawlEmails,
+        existingContacts: refreshedCompany.contacts.map((c) => ({
+          firstName: c.firstName,
+          lastName: c.lastName,
+          email: c.email,
+        })),
+        phone: refreshedCompany.phone ?? null,
+      });
+      stages.push({
+        stage: "email_cascade",
+        status: cascadeResult.contactsCreated > 0 ? JobStatus.SUCCEEDED : JobStatus.PARTIAL,
+        error: cascadeResult.warnings.length > 0 ? cascadeResult.warnings.join("; ") : undefined,
+      });
+    }
 
     // Early abandon: if no email was found after the full cascade, archive the
     // lead immediately. Only the phone number (if any) is kept. This avoids
@@ -278,194 +312,316 @@ export async function runCompanyFullPipeline(companyId: string) {
     // Resolve industry playbook
     const playbook = resolvePlaybook(companyWithEvidence.industry);
 
-    // Business context extraction
-    let businessContext: Awaited<ReturnType<typeof extractBusinessContext>> | null = null;
-    try {
-      businessContext = await extractBusinessContext({
-        companyName: companyWithEvidence.name,
-        website: companyWithEvidence.website,
-        industry: companyWithEvidence.industry,
-        crawlPages: companyWithEvidence.crawlPages,
-      });
-      await persistBusinessContext(companyWithEvidence.id, businessContext);
-      stages.push({ stage: "business-context", status: JobStatus.SUCCEEDED });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Business context extraction failed.";
-      stages.push({ stage: "business-context", status: JobStatus.FAILED, error: message });
-      // Non-fatal — continue pipeline without business context
+    // Fetch Google reviews as a pain-hypothesis signal (non-fatal)
+    let reviewSignals: ReviewPainSignals | null = null;
+    if (companyWithEvidence.googlePlaceId) {
+      try {
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY ?? "";
+        const reviews = await fetchGoogleReviews(companyWithEvidence.googlePlaceId, { apiKey });
+        if (reviews.length > 0) {
+          reviewSignals = extractPainSignals(reviews);
+        }
+        stages.push({
+          stage: "google-reviews",
+          status: reviews.length > 0 ? JobStatus.SUCCEEDED : JobStatus.PARTIAL,
+          error: reviews.length === 0 ? "No reviews found for this place." : undefined,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Google reviews fetch failed.";
+        stages.push({ stage: "google-reviews", status: JobStatus.PARTIAL, error: message });
+        // Non-fatal — continue pipeline without review signals
+      }
     }
 
-    let painHypothesis: Awaited<ReturnType<typeof generatePainHypothesis>>;
+    // Combined business context + pain hypothesis extraction (single LLM call)
+    let businessContext: Awaited<ReturnType<typeof extractBusinessContextAndPain>>["business_context"] | null = null;
+    let painHypothesis: Awaited<ReturnType<typeof extractBusinessContextAndPain>>["pain_hypothesis"];
 
-    try {
-      painHypothesis = await generatePainHypothesis(
-        {
+    const existingBusinessContext = await db.businessContext.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
+    const existingPainHypothesis = await db.painHypothesis.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingBusinessContext && existingPainHypothesis) {
+      // Reconstruct from rawPayload if available, otherwise from DB fields.
+      businessContext = existingBusinessContext.rawPayload
+        ? (existingBusinessContext.rawPayload as unknown as NonNullable<typeof businessContext>)
+        : {
+            website_summary: existingBusinessContext.websiteSummary,
+            services_offerings: existingBusinessContext.servicesOfferings as string[],
+            customer_type: existingBusinessContext.customerType as "b2b" | "b2c" | "mixed" | "unclear",
+            weak_lead_capture_signals: (existingBusinessContext.weakLeadCaptureSignals as string[] | null) ?? [],
+            operational_clues: (existingBusinessContext.operationalClues as string[] | null) ?? [],
+            urgency_signals: (existingBusinessContext.urgencySignals as string[] | null) ?? [],
+            decision_maker_clues: (existingBusinessContext.decisionMakerClues as string[] | null) ?? [],
+            tone_brand_clues: (existingBusinessContext.toneBrandClues as string[] | null) ?? [],
+          };
+
+      painHypothesis = existingPainHypothesis.rawPayload
+        ? (existingPainHypothesis.rawPayload as typeof painHypothesis)
+        : {
+            primary_pain: existingPainHypothesis.primaryPain,
+            secondary_pains: existingPainHypothesis.secondaryPains as string[],
+            evidence: existingPainHypothesis.evidence as Array<{
+              source_type: string;
+              source_url: string;
+              snippet: string;
+              signal_type: string;
+              confidence: number;
+            }>,
+            business_impact: existingPainHypothesis.businessImpact,
+            confidence_score: existingPainHypothesis.confidenceScore,
+            recommended_service_angle: existingPainHypothesis.recommendedServiceAngle,
+            recommended_lead_magnet_type: existingPainHypothesis.recommendedLeadMagnetType,
+            insufficient_evidence: existingPainHypothesis.insufficientEvidence,
+            company_summary: existingPainHypothesis.companySummary ?? "",
+            observed_signals: (existingPainHypothesis.observedFacts as Array<{
+              signal: string;
+              source: string;
+              confidence: number;
+              category: "observed" | "inferred" | "speculative";
+            }> | null) ?? [],
+            likely_pains: [
+              ...((existingPainHypothesis.reasonableInferences as Array<{
+                pain: string;
+                category: "observed" | "inferred" | "speculative";
+                evidence_refs: string[];
+              }> | null) ?? []),
+              ...((existingPainHypothesis.speculativeAssumptions as Array<{
+                pain: string;
+                category: "observed" | "inferred" | "speculative";
+                evidence_refs: string[];
+              }> | null) ?? []),
+            ],
+            best_outreach_angle: existingPainHypothesis.bestOutreachAngle ?? "",
+            caution_do_not_claim: (existingPainHypothesis.cautionNotes as string[] | null) ?? [],
+          };
+
+      stages.push({ stage: "business-context", status: JobStatus.SUCCEEDED, skipped: true });
+      stages.push({
+        stage: "pain-hypothesis",
+        status: painHypothesis.insufficient_evidence ? JobStatus.PARTIAL : JobStatus.SUCCEEDED,
+        skipped: true,
+      });
+    } else {
+      try {
+        const combined = await extractBusinessContextAndPain(
+          {
+            companyName: companyWithEvidence.name,
+            website: companyWithEvidence.website,
+            industry: companyWithEvidence.industry,
+            crawlPages: companyWithEvidence.crawlPages,
+          },
+          {
+            playbook: playbook
+              ? {
+                  commonPains: playbook.commonPains,
+                  offerAngles: playbook.offerAngles,
+                  messagingFocus: playbook.messagingFocus,
+                }
+              : null,
+            reviewSignals,
+          },
+        );
+
+        businessContext = combined.business_context;
+        painHypothesis = combined.pain_hypothesis;
+
+        // Persist both results
+        try {
+          await persistBusinessContext(companyWithEvidence.id, businessContext);
+          stages.push({ stage: "business-context", status: JobStatus.SUCCEEDED });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Business context persistence failed.";
+          stages.push({ stage: "business-context", status: JobStatus.FAILED, error: message });
+          // Non-fatal — business context was still extracted for downstream use
+        }
+
+        await persistPainHypothesis(companyId, painHypothesis);
+        stages.push({
+          stage: "pain-hypothesis",
+          status: painHypothesis.insufficient_evidence ? JobStatus.PARTIAL : JobStatus.SUCCEEDED,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Business context and pain hypothesis generation failed.";
+        await persistPipelineStageOutcome({
+          companyId,
+          provider: SourceProvider.OPENAI,
+          stage: EnrichmentStage.PAIN_HYPOTHESIS_GENERATION,
+          status: JobStatus.FAILED,
+          error: message,
+        });
+        stages.push({
+          stage: "business-context",
+          status: JobStatus.FAILED,
+          error: message,
+        });
+        stages.push({
+          stage: "pain-hypothesis",
+          status: JobStatus.FAILED,
+          error: message,
+        });
+
+        return {
+          status: JobStatus.FAILED,
+          error: message,
+          stages,
+        };
+      }
+    }
+
+    let llmScore: Awaited<ReturnType<typeof generateLeadScore>>;
+
+    const existingLeadScore = await db.leadScore.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingLeadScore?.rawPayload && "sub_scores" in (existingLeadScore.rawPayload as object)) {
+      llmScore = existingLeadScore.rawPayload as Awaited<ReturnType<typeof generateLeadScore>>;
+      stages.push({ stage: "score", status: JobStatus.SUCCEEDED, skipped: true });
+    } else {
+      try {
+        llmScore = await generateLeadScore({
           companyName: companyWithEvidence.name,
           website: companyWithEvidence.website,
           industry: companyWithEvidence.industry,
-          crawlPages: companyWithEvidence.crawlPages,
-        },
-        {
+          employeeCount: companyWithEvidence.employeeCount,
+          description: companyWithEvidence.description,
+          contacts: companyWithEvidence.contacts.map((c) => ({
+            fullName: c.fullName,
+            title: c.title,
+            email: c.email,
+            phone: c.phone,
+            seniority: c.seniority,
+            decisionMakerConfidence: c.decisionMakerConfidence,
+          })),
+          painHypothesis: {
+            primary_pain: painHypothesis.primary_pain,
+            confidence_score: painHypothesis.confidence_score,
+            business_impact: painHypothesis.business_impact,
+            company_summary: painHypothesis.company_summary,
+            observed_signals: painHypothesis.observed_signals,
+            best_outreach_angle: painHypothesis.best_outreach_angle,
+            insufficient_evidence: painHypothesis.insufficient_evidence,
+          },
           businessContext: businessContext
             ? {
                 website_summary: businessContext.website_summary,
                 services_offerings: businessContext.services_offerings,
                 customer_type: businessContext.customer_type,
                 urgency_signals: businessContext.urgency_signals,
+                weak_lead_capture_signals: businessContext.weak_lead_capture_signals,
               }
             : null,
           playbook: playbook
             ? {
                 commonPains: playbook.commonPains,
-                offerAngles: playbook.offerAngles,
                 messagingFocus: playbook.messagingFocus,
               }
             : null,
-        },
-      );
-      await persistPainHypothesis(companyId, painHypothesis);
-      stages.push({
-        stage: "pain-hypothesis",
-        status: painHypothesis.insufficient_evidence ? JobStatus.PARTIAL : JobStatus.SUCCEEDED,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Pain hypothesis generation failed.";
-      await persistPipelineStageOutcome({
-        companyId,
-        provider: SourceProvider.OPENAI,
-        stage: EnrichmentStage.PAIN_HYPOTHESIS_GENERATION,
-        status: JobStatus.FAILED,
-        error: message,
-      });
-      stages.push({
-        stage: "pain-hypothesis",
-        status: JobStatus.FAILED,
-        error: message,
-      });
+        });
+        // Resolve recommended contact
+        const recommendedContact =
+          companyWithEvidence.contacts[llmScore.recommended_primary_contact_index] ??
+          companyWithEvidence.contacts[0];
+        await persistLeadScore(companyId, llmScore, recommendedContact?.id);
+        stages.push({ stage: "score", status: JobStatus.SUCCEEDED });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Lead scoring failed.";
+        await persistPipelineStageOutcome({
+          companyId,
+          provider: SourceProvider.OPENAI,
+          stage: EnrichmentStage.LEAD_SCORING,
+          status: JobStatus.FAILED,
+          error: message,
+        });
+        stages.push({
+          stage: "score",
+          status: JobStatus.FAILED,
+          error: message,
+        });
 
-      return {
-        status: JobStatus.FAILED,
-        error: message,
-        stages,
-      };
-    }
-
-    let llmScore: Awaited<ReturnType<typeof generateLeadScore>>;
-
-    try {
-      llmScore = await generateLeadScore({
-        companyName: companyWithEvidence.name,
-        website: companyWithEvidence.website,
-        industry: companyWithEvidence.industry,
-        employeeCount: companyWithEvidence.employeeCount,
-        description: companyWithEvidence.description,
-        contacts: companyWithEvidence.contacts.map((c) => ({
-          fullName: c.fullName,
-          title: c.title,
-          email: c.email,
-          phone: c.phone,
-          seniority: c.seniority,
-          decisionMakerConfidence: c.decisionMakerConfidence,
-        })),
-        painHypothesis: {
-          primary_pain: painHypothesis.primary_pain,
-          confidence_score: painHypothesis.confidence_score,
-          business_impact: painHypothesis.business_impact,
-          company_summary: painHypothesis.company_summary,
-          observed_signals: painHypothesis.observed_signals,
-          best_outreach_angle: painHypothesis.best_outreach_angle,
-          insufficient_evidence: painHypothesis.insufficient_evidence,
-        },
-        businessContext: businessContext
-          ? {
-              website_summary: businessContext.website_summary,
-              services_offerings: businessContext.services_offerings,
-              customer_type: businessContext.customer_type,
-              urgency_signals: businessContext.urgency_signals,
-              weak_lead_capture_signals: businessContext.weak_lead_capture_signals,
-            }
-          : null,
-        playbook: playbook
-          ? {
-              commonPains: playbook.commonPains,
-              messagingFocus: playbook.messagingFocus,
-            }
-          : null,
-      });
-      // Resolve recommended contact
-      const recommendedContact =
-        companyWithEvidence.contacts[llmScore.recommended_primary_contact_index] ??
-        companyWithEvidence.contacts[0];
-      await persistLeadScore(companyId, llmScore, recommendedContact?.id);
-      stages.push({ stage: "score", status: JobStatus.SUCCEEDED });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Lead scoring failed.";
-      await persistPipelineStageOutcome({
-        companyId,
-        provider: SourceProvider.OPENAI,
-        stage: EnrichmentStage.LEAD_SCORING,
-        status: JobStatus.FAILED,
-        error: message,
-      });
-      stages.push({
-        stage: "score",
-        status: JobStatus.FAILED,
-        error: message,
-      });
-
-      return {
-        status: JobStatus.FAILED,
-        error: message,
-        stages,
-      };
+        return {
+          status: JobStatus.FAILED,
+          error: message,
+          stages,
+        };
+      }
     }
 
     let leadMagnet: Awaited<ReturnType<typeof buildLeadMagnet>>;
     let persistedLeadMagnet: Awaited<ReturnType<typeof persistLeadMagnet>>;
 
-    try {
-      leadMagnet = await buildLeadMagnet(
-        {
-          companyName: companyWithEvidence.name,
-          industry: companyWithEvidence.industry,
-          primaryPain: painHypothesis.primary_pain,
-          recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
-          recommendedServiceAngle: painHypothesis.recommended_service_angle,
-          insufficientEvidence: painHypothesis.insufficient_evidence,
-        },
-        {
-          playbook: playbook
-            ? {
-                preferredLeadMagnetTypes: playbook.preferredLeadMagnetTypes,
-                offerAngles: playbook.offerAngles,
-                messagingFocus: playbook.messagingFocus,
-              }
-            : null,
-        },
-      );
-      persistedLeadMagnet = await persistLeadMagnet(companyId, leadMagnet);
-      stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Lead magnet generation failed.";
-      await persistPipelineStageOutcome({
-        companyId,
-        provider: SourceProvider.OPENAI,
-        stage: EnrichmentStage.LEAD_MAGNET_GENERATION,
-        status: JobStatus.FAILED,
-        error: message,
-      });
-      stages.push({
-        stage: "lead-magnet",
-        status: JobStatus.FAILED,
-        error: message,
-      });
+    const existingLeadMagnet = await db.leadMagnet.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
 
-      return {
-        status: JobStatus.FAILED,
-        error: message,
-        stages,
-      };
+    if (existingLeadMagnet) {
+      persistedLeadMagnet = existingLeadMagnet;
+      leadMagnet = existingLeadMagnet.rawPayload
+        ? (existingLeadMagnet.rawPayload as Awaited<ReturnType<typeof buildLeadMagnet>>)
+        : {
+            title: existingLeadMagnet.title,
+            type: existingLeadMagnet.type,
+            summary: existingLeadMagnet.summary,
+            why_it_matches_the_lead: existingLeadMagnet.whyItMatchesTheLead,
+            suggested_delivery_format: existingLeadMagnet.suggestedDeliveryFormat,
+            estimated_time_to_prepare: existingLeadMagnet.estimatedTimeToPrepare,
+            suggested_outreach_mention: existingLeadMagnet.suggestedOutreachMention ?? "",
+            content_body: existingLeadMagnet.contentBody ?? "",
+          };
+      stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED, skipped: true });
+    } else {
+      try {
+        leadMagnet = await buildLeadMagnet(
+          {
+            companyName: companyWithEvidence.name,
+            industry: companyWithEvidence.industry,
+            primaryPain: painHypothesis.primary_pain,
+            recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
+            recommendedServiceAngle: painHypothesis.recommended_service_angle,
+            insufficientEvidence: painHypothesis.insufficient_evidence,
+          },
+          {
+            playbook: playbook
+              ? {
+                  preferredLeadMagnetTypes: playbook.preferredLeadMagnetTypes,
+                  offerAngles: playbook.offerAngles,
+                  messagingFocus: playbook.messagingFocus,
+                }
+              : null,
+          },
+        );
+        persistedLeadMagnet = await persistLeadMagnet(companyId, leadMagnet);
+        stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Lead magnet generation failed.";
+        await persistPipelineStageOutcome({
+          companyId,
+          provider: SourceProvider.OPENAI,
+          stage: EnrichmentStage.LEAD_MAGNET_GENERATION,
+          status: JobStatus.FAILED,
+          error: message,
+        });
+        stages.push({
+          stage: "lead-magnet",
+          status: JobStatus.FAILED,
+          error: message,
+        });
+
+        return {
+          status: JobStatus.FAILED,
+          error: message,
+          stages,
+        };
+      }
     }
 
     let diagnosticForm: ReturnType<typeof buildDiagnosticFormBlueprint>;
@@ -476,55 +632,100 @@ export async function runCompanyFullPipeline(companyId: string) {
       select: { id: true },
     });
 
-    try {
-      diagnosticForm = buildDiagnosticFormBlueprint({
-        companyName: companyWithEvidence.name,
-        industry: companyWithEvidence.industry,
-        primaryPain: painHypothesis.primary_pain,
-        serviceAngle: painHypothesis.recommended_service_angle,
-      });
-      persistedDiagnosticForm = await persistDiagnosticFormBlueprint({
-        companyId,
-        painHypothesisId: persistedPain?.id,
-        blueprint: diagnosticForm,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Diagnostic form generation failed.";
-      stages.push({
-        stage: "diagnostic-form",
-        status: JobStatus.FAILED,
-        error: message,
-      });
-
-      return {
-        status: JobStatus.FAILED,
-        error: message,
-        stages,
-      };
-    }
+    const existingDiagnosticForm = await db.diagnosticFormBlueprint.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      include: { formLink: true },
+    });
 
     let diagnosticFormUrl: string | null = null;
-    let diagnosticFormStatus: JobStatus = JobStatus.SUCCEEDED;
-    let diagnosticFormError: string | undefined;
 
-    try {
-      const liveForm = await createLiveDiagnosticFormLink({
-        blueprintId: persistedDiagnosticForm.id,
-        blueprint: diagnosticForm,
+    if (existingDiagnosticForm) {
+      persistedDiagnosticForm = existingDiagnosticForm;
+      diagnosticForm = existingDiagnosticForm.rawPayload
+        ? (existingDiagnosticForm.rawPayload as ReturnType<typeof buildDiagnosticFormBlueprint>)
+        : buildDiagnosticFormBlueprint({
+            companyName: companyWithEvidence.name,
+            industry: companyWithEvidence.industry,
+            primaryPain: painHypothesis.primary_pain,
+            serviceAngle: painHypothesis.recommended_service_angle,
+          });
+
+      diagnosticFormUrl = existingDiagnosticForm.formLink?.url ?? null;
+      let diagnosticFormStatus: JobStatus = JobStatus.SUCCEEDED;
+      let diagnosticFormError: string | undefined;
+
+      // Create live form link only if one doesn't already exist
+      if (!existingDiagnosticForm.formLink) {
+        try {
+          const liveForm = await createLiveDiagnosticFormLink({
+            blueprintId: persistedDiagnosticForm.id,
+            blueprint: diagnosticForm,
+          });
+          diagnosticFormUrl = liveForm?.responderUrl ?? null;
+        } catch (error) {
+          diagnosticFormStatus = JobStatus.PARTIAL;
+          diagnosticFormError =
+            error instanceof Error ? error.message : "Creating the live diagnostic form failed.";
+        }
+      }
+
+      stages.push({
+        stage: "diagnostic-form",
+        status: diagnosticFormStatus,
+        error: diagnosticFormError,
+        skipped: true,
       });
-      diagnosticFormUrl = liveForm?.responderUrl ?? null;
-    } catch (error) {
-      diagnosticFormStatus = JobStatus.PARTIAL;
-      diagnosticFormError =
-        error instanceof Error ? error.message : "Creating the live diagnostic form failed.";
-    }
+    } else {
+      try {
+        diagnosticForm = buildDiagnosticFormBlueprint({
+          companyName: companyWithEvidence.name,
+          industry: companyWithEvidence.industry,
+          primaryPain: painHypothesis.primary_pain,
+          serviceAngle: painHypothesis.recommended_service_angle,
+        });
+        persistedDiagnosticForm = await persistDiagnosticFormBlueprint({
+          companyId,
+          painHypothesisId: persistedPain?.id,
+          blueprint: diagnosticForm,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Diagnostic form generation failed.";
+        stages.push({
+          stage: "diagnostic-form",
+          status: JobStatus.FAILED,
+          error: message,
+        });
 
-    stages.push({
-      stage: "diagnostic-form",
-      status: diagnosticFormStatus,
-      error: diagnosticFormError,
-    });
+        return {
+          status: JobStatus.FAILED,
+          error: message,
+          stages,
+        };
+      }
+
+      let diagnosticFormStatus: JobStatus = JobStatus.SUCCEEDED;
+      let diagnosticFormError: string | undefined;
+
+      try {
+        const liveForm = await createLiveDiagnosticFormLink({
+          blueprintId: persistedDiagnosticForm.id,
+          blueprint: diagnosticForm,
+        });
+        diagnosticFormUrl = liveForm?.responderUrl ?? null;
+      } catch (error) {
+        diagnosticFormStatus = JobStatus.PARTIAL;
+        diagnosticFormError =
+          error instanceof Error ? error.message : "Creating the live diagnostic form failed.";
+      }
+
+      stages.push({
+        stage: "diagnostic-form",
+        status: diagnosticFormStatus,
+        error: diagnosticFormError,
+      });
+    }
 
     const contacts = companyWithEvidence.contacts.filter((contact) => Boolean(contact.email));
 
@@ -631,6 +832,21 @@ export async function runCompanyFullPipeline(companyId: string) {
         continue;
       }
 
+      // Idempotency: skip outreach generation if a draft already exists for this contact
+      const existingDraftForContact = companyWithEvidence.outreachDrafts.find(
+        (d) => d.contactId === contact.id && d.draftType === "INITIAL",
+      );
+      if (existingDraftForContact) {
+        campaignDrafts.push({
+          id: existingDraftForContact.id,
+          companyId: companyWithEvidence.id,
+          approvalStatus: existingDraftForContact.approvalStatus,
+          gmailSyncStatus: existingDraftForContact.gmailDraftLink?.syncStatus ?? ExternalSyncStatus.NOT_READY,
+          suppressionReason: null,
+        });
+        continue;
+      }
+
       const llmOutreach = await generateOutreachDraft({
         companyName: companyWithEvidence.name,
         contactName: contact.firstName ?? contact.fullName,
@@ -717,8 +933,9 @@ export async function runCompanyFullPipeline(companyId: string) {
           if (revised.follow_up_1) outreach = { ...outreach, follow_up_1: revised.follow_up_1 };
           if (revised.follow_up_2) outreach = { ...outreach, follow_up_2: revised.follow_up_2 };
         }
-      } catch {
+      } catch (error) {
         // QA is advisory — don't block pipeline
+        console.warn("[full-pipeline] Non-fatal: QA check failed for contact", contact.id, ":", error);
       }
 
       const persistedDraft = await persistOutreachDraft({
@@ -744,8 +961,8 @@ export async function runCompanyFullPipeline(companyId: string) {
       if (qaResult) {
         try {
           await persistQaCheckResult(persistedDraft.id, qaResult);
-        } catch {
-          // QA persistence failure is non-fatal
+        } catch (error) {
+          console.warn("[full-pipeline] Non-fatal: Failed to persist QA check result for draft", persistedDraft.id, ":", error);
         }
       }
 
@@ -760,8 +977,8 @@ export async function runCompanyFullPipeline(companyId: string) {
           },
           db,
         );
-      } catch {
-        // Follow-up creation failure is non-fatal
+      } catch (error) {
+        console.warn("[full-pipeline] Non-fatal: Failed to create follow-up skeletons for draft", persistedDraft.id, ":", error);
       }
 
       campaignDrafts.push({

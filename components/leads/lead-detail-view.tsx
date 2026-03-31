@@ -1,10 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Activity, Archive, Linkedin, Mail, Newspaper, ScanSearch, Sparkles, Users, Wrench } from "lucide-react";
+import {
+  Activity,
+  Archive,
+  CheckCircle2,
+  ChevronDown,
+  Circle,
+  Linkedin,
+  Loader2,
+  Mail,
+  Newspaper,
+  RotateCcw,
+  ScanSearch,
+  Sparkles,
+  Users,
+  Wrench,
+  XCircle,
+} from "lucide-react";
 
 import { ManualReviewToggle } from "@/components/leads/manual-review-toggle";
 import { PipelineActions } from "@/components/leads/pipeline-actions";
@@ -24,16 +40,161 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
+// ---------------------------------------------------------------------------
+// Pipeline polling types
+// ---------------------------------------------------------------------------
+
+type StageDisplayStatus = "done" | "running" | "failed" | "pending";
+
+type PipelineStageResult = {
+  stage: string;
+  status: StageDisplayStatus;
+  error?: string;
+};
+
+type PipelineStatusResponse = {
+  status: "idle" | "running" | "done" | "failed";
+  currentStage: string | null;
+  stages: PipelineStageResult[];
+  updatedAt: string;
+};
+
+// ---------------------------------------------------------------------------
+// Polling hook — polls /api/leads/[id]/status every 2 s while active.
+// Automatically stops when status reaches "done" or "failed".
+// ---------------------------------------------------------------------------
+
+function usePipelinePolling(leadId: string, active: boolean) {
+  const [pollingStatus, setPollingStatus] = useState<PipelineStatusResponse | null>(null);
+  const [pollingError, setPollingError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRef = useRef(active);
+
+  // Keep the ref in sync with the prop so the closure always sees the latest value.
+  activeRef.current = active;
+
+  const stopPolling = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+  }, []);
+
+  const poll = useCallback(async () => {
+    if (!activeRef.current) return;
+
+    abortRef.current = new AbortController();
+
+    try {
+      const response = await fetch(`/api/leads/${leadId}/status`, {
+        signal: abortRef.current.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error("Status check failed.");
+      }
+
+      const data = (await response.json()) as PipelineStatusResponse;
+      setPollingStatus(data);
+      setPollingError(null);
+
+      if (data.status === "done" || data.status === "failed") {
+        stopPolling();
+        return;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setPollingError(err instanceof Error ? err.message : "Status check failed.");
+    }
+
+    // Schedule next tick only if still active.
+    if (activeRef.current) {
+      timerRef.current = setTimeout(() => {
+        void poll();
+      }, 2000);
+    }
+  }, [leadId, stopPolling]);
+
+  useEffect(() => {
+    if (active) {
+      setPollingStatus(null);
+      setPollingError(null);
+      void poll();
+    } else {
+      stopPolling();
+    }
+
+    return () => {
+      stopPolling();
+    };
+  }, [active, poll, stopPolling]);
+
+  return { pollingStatus, pollingError, stopPolling };
+}
+
+// ---------------------------------------------------------------------------
+// Stage icon helper
+// ---------------------------------------------------------------------------
+
+function StageIcon({ status }: { status: StageDisplayStatus }) {
+  switch (status) {
+    case "done":
+      return <CheckCircle2 className="h-4 w-4 shrink-0 text-[#37523a]" />;
+    case "running":
+      return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#3d4b87]" />;
+    case "failed":
+      return <XCircle className="h-4 w-4 shrink-0 text-[#8c3640]" />;
+    default:
+      return <Circle className="h-4 w-4 shrink-0 text-[rgba(22,32,51,0.32)]" />;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("company");
   const [archiving, setArchiving] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  const [pipelinePollingActive, setPipelinePollingActive] = useState(false);
+
+  const { pollingStatus, pollingError } = usePipelinePolling(
+    lead.company.id,
+    pipelinePollingActive,
+  );
+
+  // Detect when polling finishes so we can refresh the lead data.
+  const prevPollingStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevPollingStatus.current;
+    const current = pollingStatus?.status ?? null;
+    prevPollingStatus.current = current;
+
+    if ((current === "done" || current === "failed") && prev !== current) {
+      setPipelinePollingActive(false);
+      router.refresh();
+    }
+  }, [pollingStatus, router]);
+
+  // Determine whether the pipeline accordion should show a badge.
+  const pipelineHasActivity = lead.pipeline.completedCount > 0;
+  const pipelineActionRequired = lead.pipeline.stages.some(
+    (s) => s.status === "FAILED" || s.status === "NOT_STARTED",
+  );
 
   async function handleArchive() {
     setArchiving(true);
     await fetch(`/api/leads/${lead.company.id}/archive`, { method: "POST" });
     router.push("/leads");
   }
+
   const [engagementMessage, setEngagementMessage] = useState<string | null>(null);
   const [engagementError, setEngagementError] = useState<string | null>(null);
   const [pendingEngagementDraftId, setPendingEngagementDraftId] = useState<string | null>(null);
@@ -48,9 +209,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
 
     void fetch(`/api/outreach-drafts/${draftId}/engagement`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ eventType }),
     })
       .then(async (response) => {
@@ -58,7 +217,6 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
         if (!response.ok) {
           throw new Error(payload.error ?? "Logging engagement failed.");
         }
-
         setEngagementMessage(
           payload.followUpCreated
             ? "Engagement logged and follow-up draft generated."
@@ -88,9 +246,7 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
 
     void fetch(path, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
     })
       .then(async (response) => {
@@ -98,7 +254,6 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
         if (!response.ok) {
           throw new Error(payload.error ?? "Outreach action failed.");
         }
-
         setOutreachMessage(successMessage);
         router.refresh();
       })
@@ -112,14 +267,17 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
       });
   }
 
+  // Called by PipelineActions when the user triggers any pipeline run.
+  function handlePipelineStart() {
+    setPipelinePollingActive(true);
+    setPipelineOpen(true);
+  }
+
   return (
     <div className="space-y-6">
-      <PipelineActions
-        hasWebsite={lead.company.hasWebsite}
-        leadId={lead.company.id}
-        pipeline={lead.pipeline}
-      />
-
+      {/* ------------------------------------------------------------------ */}
+      {/* TOP — Company summary card                                          */}
+      {/* ------------------------------------------------------------------ */}
       <section className="dashboard-panel rounded-[3rem] p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-4">
@@ -130,6 +288,11 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
               <span className="dashboard-pill rounded-full px-4 py-2 text-xs uppercase tracking-[0.22em]">
                 Score {lead.company.scoreLabel}
               </span>
+              {lead.company.industry ? (
+                <span className="dashboard-pill rounded-full px-4 py-2 text-xs uppercase tracking-[0.22em]">
+                  {lead.company.industry}
+                </span>
+              ) : null}
             </div>
             <div>
               <h1 className="font-display text-5xl text-[#172033]">{lead.company.name}</h1>
@@ -162,6 +325,152 @@ export function LeadDetailView({ lead }: { lead: LeadDetailViewModel }) {
         </div>
       </section>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* MIDDLE — Pipeline accordion (collapsed by default)                  */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="dashboard-panel rounded-[2rem]">
+        {/* Accordion header */}
+        <button
+          type="button"
+          onClick={() => setPipelineOpen((prev) => !prev)}
+          className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-[rgba(22,32,51,0.02)]"
+          aria-expanded={pipelineOpen}
+        >
+          <div className="flex items-center gap-3">
+            <span className="font-display text-xl text-[#172033]">Pipeline actions</span>
+
+            {/* Status badge — always shown for quick at-a-glance feedback */}
+            {pipelinePollingActive ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(110,127,217,0.14)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#3d4b87]">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Running…
+              </span>
+            ) : pipelineHasActivity && !pipelineActionRequired ? (
+              <span className="rounded-full bg-[rgba(200,226,192,0.24)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#37523a]">
+                {lead.pipeline.completedCount}/{lead.pipeline.totalCount} stages complete
+              </span>
+            ) : pipelineActionRequired ? (
+              <span className="rounded-full bg-[rgba(241,176,143,0.18)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b5b45]">
+                Action required
+              </span>
+            ) : (
+              <span className="rounded-full bg-[rgba(101,122,179,0.08)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[rgba(22,32,51,0.68)]">
+                Pipeline ready
+              </span>
+            )}
+          </div>
+
+          <ChevronDown
+            className={cn(
+              "h-5 w-5 shrink-0 text-[rgba(22,32,51,0.5)] transition-transform duration-200",
+              pipelineOpen && "rotate-180",
+            )}
+          />
+        </button>
+
+        {/* Accordion body */}
+        <AnimatePresence initial={false}>
+          {pipelineOpen ? (
+            <motion.div
+              key="pipeline-body"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 100, damping: 22, mass: 0.8 }}
+              style={{ overflow: "hidden" }}
+            >
+              <div className="border-t border-[rgba(101,122,179,0.1)] px-6 pb-6 pt-5">
+                {/* Hint when pipeline has never been run */}
+                {!pipelineHasActivity && !pipelinePollingActive ? (
+                  <p className="mb-4 text-sm text-[rgba(22,32,51,0.62)]">
+                    Run the full pipeline to generate outreach content for this lead.
+                  </p>
+                ) : null}
+
+                {/* Live polling progress indicator */}
+                {pipelinePollingActive ? (
+                  <div className="mb-5 rounded-[1.25rem] border border-[rgba(110,127,217,0.18)] bg-[rgba(110,127,217,0.06)] p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-[#3d4b87]" />
+                      <span className="text-sm font-medium text-[#172033]">Pipeline running…</span>
+                    </div>
+
+                    {pollingStatus && pollingStatus.stages.length > 0 ? (
+                      <ul className="space-y-1.5">
+                        {pollingStatus.stages.map((stage) => (
+                          <li key={stage.stage} className="flex items-center gap-2 text-sm text-[rgba(22,32,51,0.72)]">
+                            <StageIcon status={stage.status} />
+                            <span className="capitalize">{stage.stage.replaceAll("-", " ").replaceAll("_", " ")}</span>
+                            {stage.error ? (
+                              <span className="text-xs text-[#8c3640]">— {stage.error}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-[rgba(22,32,51,0.5)]">Waiting for first stage…</p>
+                    )}
+
+                    {pollingError ? (
+                      <p className="mt-2 text-xs text-[#f1b08f]">
+                        <RotateCcw className="mr-1 inline h-3 w-3" />
+                        {pollingError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Done/failed summary after polling completes */}
+                {!pipelinePollingActive && pollingStatus ? (
+                  <div
+                    className={cn(
+                      "mb-5 rounded-[1.25rem] p-4",
+                      pollingStatus.status === "done"
+                        ? "border border-[rgba(200,226,192,0.4)] bg-[rgba(200,226,192,0.12)]"
+                        : "border border-[rgba(231,120,120,0.2)] bg-[rgba(231,120,120,0.06)]",
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        "mb-2 text-sm font-medium",
+                        pollingStatus.status === "done" ? "text-[#37523a]" : "text-[#8c3640]",
+                      )}
+                    >
+                      {pollingStatus.status === "done"
+                        ? "Pipeline completed."
+                        : "Pipeline stopped with errors."}
+                    </p>
+                    {pollingStatus.stages.length > 0 ? (
+                      <ul className="space-y-1.5">
+                        {pollingStatus.stages.map((stage) => (
+                          <li key={stage.stage} className="flex items-center gap-2 text-sm text-[rgba(22,32,51,0.72)]">
+                            <StageIcon status={stage.status} />
+                            <span className="capitalize">{stage.stage.replaceAll("-", " ").replaceAll("_", " ")}</span>
+                            {stage.error ? (
+                              <span className="text-xs text-[#8c3640]">— {stage.error}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <PipelineActions
+                  hasWebsite={lead.company.hasWebsite}
+                  leadId={lead.company.id}
+                  pipeline={lead.pipeline}
+                  onPipelineStart={handlePipelineStart}
+                />
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </section>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* BOTTOM — Tabbed content                                             */}
+      {/* ------------------------------------------------------------------ */}
       <div className="flex flex-wrap gap-3">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button

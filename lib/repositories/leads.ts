@@ -316,7 +316,8 @@ export async function getIndustrySummaries(): Promise<IndustrySummary[]> {
         slug: encodeURIComponent((row.industry as string).toLowerCase().replace(/\s+/g, "-")),
         leadCount: row._count.id,
       }));
-  } catch {
+  } catch (error) {
+    console.error("[leads-repository] Failed to fetch getIndustrySummaries:", error);
     return [];
   }
 }
@@ -401,7 +402,8 @@ export async function getLeadSummaries(input?: {
         hasNextPage: page < totalPages,
       },
     };
-  } catch {
+  } catch (error) {
+    console.error("[leads-repository] Failed to fetch getLeadSummaries:", error);
     return {
       leads: [],
       pagination: {
@@ -467,16 +469,54 @@ export async function getApprovalQueue(): Promise<{
       }),
     ]);
 
-    const items: ApprovalQueueItem[] = drafts.map((draft) => ({
-      draftId: draft.id,
-      leadId: draft.company.id,
-      companyName: draft.company.name,
-      contactName: draft.contact?.fullName ?? undefined,
-      emailSubject: draft.emailSubject1,
-      approvalStatus: draft.approvalStatus,
-      gmailSyncStatus: draft.gmailDraftLink?.syncStatus ?? "NOT_READY",
-      sheetSyncStatus: draft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
-    }));
+    // Group drafts by company so each company appears as one card in the queue.
+    // A company may have multiple drafts (initial + follow-up sequence steps).
+    const draftsByCompany = new Map<
+      string,
+      Array<(typeof drafts)[number]>
+    >();
+
+    for (const draft of drafts) {
+      const companyId = draft.company.id;
+      const existing = draftsByCompany.get(companyId);
+      if (existing) {
+        existing.push(draft);
+      } else {
+        draftsByCompany.set(companyId, [draft]);
+      }
+    }
+
+    // Derive one ApprovalQueueItem per company using the most-relevant draft
+    // (first PENDING_APPROVAL, otherwise the most recent draft).
+    const items: ApprovalQueueItem[] = [];
+
+    for (const companyDrafts of draftsByCompany.values()) {
+      const primaryDraft =
+        companyDrafts.find((d) => d.approvalStatus === "PENDING_APPROVAL") ??
+        companyDrafts[0];
+
+      const draftCount = companyDrafts.length;
+      const rawSubject = primaryDraft.emailSubject1;
+      const emailSubject =
+        !rawSubject || rawSubject === "[pending]"
+          ? draftCount > 1
+            ? `${draftCount} drafts pending generation`
+            : "Draft pending generation"
+          : draftCount > 1
+            ? `${rawSubject} (+${draftCount - 1} more)`
+            : rawSubject;
+
+      items.push({
+        draftId: primaryDraft.id,
+        leadId: primaryDraft.company.id,
+        companyName: primaryDraft.company.name,
+        contactName: primaryDraft.contact?.fullName ?? undefined,
+        emailSubject,
+        approvalStatus: primaryDraft.approvalStatus,
+        gmailSyncStatus: primaryDraft.gmailDraftLink?.syncStatus ?? "NOT_READY",
+        sheetSyncStatus: primaryDraft.sheetSyncRecords[0]?.syncStatus ?? "NOT_READY",
+      });
+    }
     const latestJobByCompany = new Map<string, (typeof outreachJobs)[number]>();
 
     for (const job of outreachJobs) {
@@ -546,7 +586,8 @@ export async function getApprovalQueue(): Promise<{
       items,
       campaignAnalytics,
     };
-  } catch {
+  } catch (error) {
+    console.error("[leads-repository] Failed to fetch getApprovalQueue:", error);
     return {
       summary: {
         pendingApprovalCount: 0,
@@ -602,7 +643,8 @@ export async function getGoogleWorkspaceStatus(): Promise<GoogleWorkspaceStatusV
       canRegisterGmailWatch:
         state.status === "CONNECTED" && Boolean(process.env.GOOGLE_GMAIL_PUBSUB_TOPIC),
     };
-  } catch {
+  } catch (error) {
+    console.error("[leads-repository] Failed to fetch getGoogleWorkspaceStatus:", error);
     const state = deriveGoogleWorkspaceState({
       ...getGoogleWorkspaceEnvState(),
       connection: null,
@@ -814,7 +856,8 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         responseSummary: (form.formLink?.responseSummary as Record<string, unknown> | null) ?? undefined,
       })),
     };
-  } catch {
+  } catch (error) {
+    console.error("[leads-repository] Failed to fetch getLeadDetail:", error);
     return null;
   }
 }

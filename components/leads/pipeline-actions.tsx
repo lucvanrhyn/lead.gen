@@ -10,6 +10,8 @@ type PipelineActionsProps = {
   leadId: string;
   hasWebsite: boolean;
   pipeline: LeadPipelineViewModel;
+  /** Called immediately when the user triggers any pipeline action. */
+  onPipelineStart?: () => void;
 };
 
 const actionConfig = [
@@ -59,7 +61,7 @@ function summarizePipelineResult(payload: {
   return "Full lead pipeline completed.";
 }
 
-export function PipelineActions({ leadId, hasWebsite, pipeline }: PipelineActionsProps) {
+export function PipelineActions({ leadId, hasWebsite, pipeline, onPipelineStart }: PipelineActionsProps) {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -87,6 +89,7 @@ export function PipelineActions({ leadId, hasWebsite, pipeline }: PipelineAction
     setPendingAction(endpoint);
     setMessage(null);
     setError(null);
+    onPipelineStart?.();
 
     startTransition(async () => {
       try {
@@ -105,6 +108,7 @@ export function PipelineActions({ leadId, hasWebsite, pipeline }: PipelineAction
     setPendingAction("full-pipeline");
     setMessage(null);
     setError(null);
+    onPipelineStart?.();
 
     startTransition(async () => {
       try {

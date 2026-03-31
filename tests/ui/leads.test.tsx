@@ -271,6 +271,9 @@ describe("LeadDetailView", () => {
 
     render(<LeadDetailView lead={leadDetail} />);
 
+    // Pipeline section is collapsed by default — expand it first
+    await user.click(screen.getByRole("button", { name: /pipeline actions/i }));
+
     expect(screen.getByRole("button", { name: /generate form/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^outreach$/i }));
@@ -303,8 +306,13 @@ describe("LeadDetailView", () => {
     expect(screen.getByText(/atlas dental group follow-up/i)).toBeInTheDocument();
   });
 
-  it("renders persisted pipeline stage state alongside the actions", () => {
+  it("renders persisted pipeline stage state alongside the actions", async () => {
+    const user = userEvent.setup();
+
     render(<LeadDetailView lead={leadDetail} />);
+
+    // Pipeline section is collapsed by default — expand it first
+    await user.click(screen.getByRole("button", { name: /pipeline actions/i }));
 
     expect(screen.getAllByText(/apollo enrich/i)).toHaveLength(2);
     expect(screen.getByText(/1 contact with email available/i)).toBeInTheDocument();

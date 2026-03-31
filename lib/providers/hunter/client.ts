@@ -43,7 +43,8 @@ export async function getHunterCreditsRemaining(
       (json.data?.requests?.searches?.used ?? 0);
 
     return Math.max(0, remaining);
-  } catch {
+  } catch (error) {
+    console.warn("[hunter] Failed to fetch remaining credits:", error);
     return 0;
   }
 }
@@ -144,7 +145,8 @@ export async function hunterVerifyEmail(
       status: data.status ?? "unknown",
       score: data.score ?? 0,
     };
-  } catch {
+  } catch (error) {
+    console.warn("[hunter] Failed to verify email:", error);
     return { status: "unknown", score: 0 };
   }
 }

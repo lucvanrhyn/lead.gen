@@ -114,7 +114,8 @@ function normalizeDomain(company: HubSpotCompanyInput) {
 
   try {
     return new URL(company.website).hostname.replace(/^www\./, "");
-  } catch {
+  } catch (error) {
+    console.warn("[hubspot] Failed to parse company website URL:", error);
     return null;
   }
 }

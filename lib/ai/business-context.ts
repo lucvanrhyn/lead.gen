@@ -127,6 +127,7 @@ export async function extractBusinessContext(
 
   return callOpenAiResponsesApi({
     envModelKey: "OPENAI_MODEL_BUSINESS_CONTEXT",
+    modelTier: "light",
     systemPrompt: BUSINESS_CONTEXT_SYSTEM_PROMPT,
     userContent,
     jsonSchemaName: "business_context",

@@ -18,13 +18,24 @@ vi.mock("@/lib/db", () => ({
     painHypothesis: {
       findFirst: painHypothesisFindFirst,
     },
+    businessContext: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    leadScore: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    leadMagnet: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    diagnosticFormBlueprint: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     enrichmentJob: {
       create: enrichmentJobCreate,
     },
   },
 }));
 
-const generatePainHypothesis = vi.fn();
 const persistPainHypothesis = vi.fn();
 const generateLeadScore = vi.fn();
 const persistLeadScore = vi.fn();
@@ -38,15 +49,16 @@ const mapLlmOutreachToOutreachSchema = vi.fn();
 const persistOutreachDraft = vi.fn();
 const evaluateOutreachSuppression = vi.fn();
 const buildCampaignAnalytics = vi.fn();
-const extractBusinessContext = vi.fn();
 const persistBusinessContext = vi.fn();
+const extractBusinessContextAndPain = vi.fn();
 const runQaCheck = vi.fn();
 const resolvePlaybook = vi.fn();
 const createFollowUpSkeletons = vi.fn();
 
 vi.mock("@/lib/ai/pain-hypothesis", () => ({
-  generatePainHypothesis,
   persistPainHypothesis,
+  buildInsufficientEvidencePainHypothesis: vi.fn(),
+  painHypothesisSchema: {},
 }));
 
 vi.mock("@/lib/ai/lead-score", () => ({
@@ -59,9 +71,17 @@ vi.mock("@/lib/ai/lead-score", () => ({
   })),
 }));
 
-vi.mock("@/lib/ai/business-context", () => ({
-  extractBusinessContext,
-  persistBusinessContext,
+vi.mock("@/lib/ai/business-context", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/business-context")>();
+  return {
+    ...actual,
+    persistBusinessContext,
+  };
+});
+
+vi.mock("@/lib/ai/business-context-and-pain", () => ({
+  extractBusinessContextAndPain,
+  businessContextAndPainSchema: {},
 }));
 
 vi.mock("@/lib/ai/qa-check", () => ({
@@ -165,15 +185,32 @@ describe("runCompanyFullPipeline", () => {
     });
     contactFindMany.mockResolvedValue([{ id: "contact-1" }]);
     painHypothesisFindFirst.mockResolvedValue({ id: "pain-1" });
-    extractBusinessContext.mockResolvedValue({
-      website_summary: "Atlas Dental Group is a dental clinic.",
-      services_offerings: ["dental checkups", "orthodontics"],
-      customer_type: "b2c",
-      weak_lead_capture_signals: [],
-      operational_clues: [],
-      urgency_signals: [],
-      decision_maker_clues: [],
-      tone_brand_clues: [],
+    extractBusinessContextAndPain.mockResolvedValue({
+      business_context: {
+        website_summary: "Atlas Dental Group is a dental clinic.",
+        services_offerings: ["dental checkups", "orthodontics"],
+        customer_type: "b2c",
+        weak_lead_capture_signals: [],
+        operational_clues: [],
+        urgency_signals: [],
+        decision_maker_clues: [],
+        tone_brand_clues: [],
+      },
+      pain_hypothesis: {
+        primary_pain: "Inconsistent booking conversion across service lines",
+        secondary_pains: [],
+        evidence: [],
+        business_impact: "Missed conversion opportunities likely reduce bookings.",
+        confidence_score: 0.72,
+        recommended_service_angle: "Conversion-focused website teardown for treatment pages",
+        recommended_lead_magnet_type: "website conversion teardown",
+        insufficient_evidence: false,
+        company_summary: "A dental group with multiple service lines.",
+        observed_signals: [],
+        likely_pains: [],
+        best_outreach_angle: "Focus on booking conversion.",
+        caution_do_not_claim: [],
+      },
     });
     persistBusinessContext.mockResolvedValue(undefined);
     resolvePlaybook.mockReturnValue({
@@ -186,21 +223,6 @@ describe("runCompanyFullPipeline", () => {
       ctaPreferences: ["send over the audit"],
       toneGuidance: "professional, empathetic",
       doNotMention: ["price"],
-    });
-    generatePainHypothesis.mockResolvedValue({
-      primary_pain: "Inconsistent booking conversion across service lines",
-      secondary_pains: [],
-      evidence: [],
-      business_impact: "Missed conversion opportunities likely reduce bookings.",
-      confidence_score: 0.72,
-      recommended_service_angle: "Conversion-focused website teardown for treatment pages",
-      recommended_lead_magnet_type: "website conversion teardown",
-      insufficient_evidence: false,
-      company_summary: "A dental group with multiple service lines.",
-      observed_signals: [],
-      likely_pains: [],
-      best_outreach_angle: "Focus on booking conversion.",
-      caution_do_not_claim: [],
     });
     generateLeadScore.mockResolvedValue({
       total_score: 72,

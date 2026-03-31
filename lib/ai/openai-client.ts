@@ -3,6 +3,12 @@ import { z } from "zod";
 type OpenAiResponsesApiOptions<T extends z.ZodTypeAny> = {
   model?: string;
   envModelKey?: string;
+  /**
+   * When set to "light", the fallback model resolves from OPENAI_LIGHT_MODEL
+   * (default: "gpt-4o-mini") instead of OPENAI_MODEL_PAIN_HYPOTHESIS / "gpt-4o".
+   * Use for simpler tasks (QA checks, summarisation) to reduce costs.
+   */
+  modelTier?: "default" | "light";
   systemPrompt: string;
   userContent: string;
   jsonSchemaName: string;
@@ -23,12 +29,23 @@ function resolveApiKey(apiKey?: string): string {
   return resolved;
 }
 
-function resolveModel(options: { model?: string; envModelKey?: string }): string {
+/** Default light model for cost-sensitive tasks (QA, summarisation). Override via OPENAI_LIGHT_MODEL env var. */
+const DEFAULT_LIGHT_MODEL = "gpt-4o-mini";
+
+function resolveModel(options: {
+  model?: string;
+  envModelKey?: string;
+  modelTier?: "default" | "light";
+}): string {
   if (options.model) return options.model;
 
   if (options.envModelKey) {
     const envModel = process.env[options.envModelKey];
     if (envModel) return envModel;
+  }
+
+  if (options.modelTier === "light") {
+    return process.env.OPENAI_LIGHT_MODEL ?? DEFAULT_LIGHT_MODEL;
   }
 
   return process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-4o";

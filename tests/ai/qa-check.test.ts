@@ -73,6 +73,32 @@ describe("runQaCheck", () => {
     },
   };
 
+  it("uses the light model tier (gpt-4o-mini default) for QA checks", async () => {
+    const originalQa = process.env.OPENAI_MODEL_QA;
+    const originalLight = process.env.OPENAI_LIGHT_MODEL;
+    delete process.env.OPENAI_MODEL_QA;
+    delete process.env.OPENAI_LIGHT_MODEL;
+
+    const mockPayload = { passed: true, issues: [], revised_fields: {} };
+
+    const fetchFn = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(mockPayload) }] }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await runQaCheck(sampleInput, { apiKey: "test_key", fetchFn });
+
+    const calledBody = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(calledBody.model).toBe("gpt-4o-mini");
+
+    process.env.OPENAI_MODEL_QA = originalQa;
+    process.env.OPENAI_LIGHT_MODEL = originalLight;
+  });
+
   it("calls OpenAI and parses the response via fetchFn", async () => {
     const mockPayload = {
       passed: true,
