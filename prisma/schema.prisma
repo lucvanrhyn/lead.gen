@@ -33,10 +33,25 @@ enum EnrichmentStage {
   APOLLO_COMPANY_ENRICHMENT
   APOLLO_PEOPLE_ENRICHMENT
   FIRECRAWL_EXTRACTION
+  BUSINESS_CONTEXT_EXTRACTION
   PAIN_HYPOTHESIS_GENERATION
   LEAD_SCORING
   LEAD_MAGNET_GENERATION
   OUTREACH_GENERATION
+  OUTREACH_QA
+  REPLY_CLASSIFICATION
+}
+
+enum ReplyClassification {
+  INTERESTED
+  MAYBE_LATER
+  NOT_INTERESTED
+  REFERRAL
+  QUESTION_ASKED
+  OUT_OF_OFFICE
+  UNSUBSCRIBE
+  BOUNCED
+  BOOKED
 }
 
 enum JobStatus {
@@ -126,6 +141,7 @@ model Company {
   status               CompanyStatus    @default(DISCOVERED)
   manualReviewRequired Boolean          @default(false) @map("manual_review_required")
   sourceConfidence     Float?           @map("source_confidence")
+  leadState            String?          @map("lead_state")
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
   contacts             Contact[]
@@ -133,6 +149,7 @@ model Company {
   technologyProfiles   TechnologyProfile[]
   newsMentions         NewsMention[]
   crawlPages           CrawlPage[]
+  businessContexts     BusinessContext[]
   painHypotheses       PainHypothesis[]
   leadScores           LeadScore[]
   leadMagnets          LeadMagnet[]
@@ -253,6 +270,27 @@ model CrawlPage {
   @@map("crawl_pages")
 }
 
+model BusinessContext {
+  id                    String         @id @default(cuid())
+  companyId             String         @map("company_id")
+  websiteSummary        String         @map("website_summary")
+  servicesOfferings     Json           @map("services_offerings")
+  customerType          String         @map("customer_type")
+  weakLeadCaptureSignals Json?         @map("weak_lead_capture_signals")
+  operationalClues      Json?          @map("operational_clues")
+  urgencySignals        Json?          @map("urgency_signals")
+  decisionMakerClues    Json?          @map("decision_maker_clues")
+  toneBrandClues        Json?          @map("tone_brand_clues")
+  modelProvider         SourceProvider? @map("model_provider")
+  rawPayload            Json?          @map("raw_payload")
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+  company               Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("business_contexts")
+}
+
 model PainHypothesis {
   id                        String   @id @default(cuid())
   companyId                 String   @map("company_id")
@@ -264,6 +302,12 @@ model PainHypothesis {
   recommendedServiceAngle   String   @map("recommended_service_angle")
   recommendedLeadMagnetType String   @map("recommended_lead_magnet_type")
   insufficientEvidence      Boolean  @default(false) @map("insufficient_evidence")
+  companySummary            String?  @map("company_summary")
+  observedFacts             Json?    @map("observed_facts")
+  reasonableInferences      Json?    @map("reasonable_inferences")
+  speculativeAssumptions    Json?    @map("speculative_assumptions")
+  bestOutreachAngle         String?  @map("best_outreach_angle")
+  cautionNotes              Json?    @map("caution_notes")
   modelProvider             SourceProvider? @map("model_provider")
   modelName                 String?  @map("model_name")
   rawPayload                Json?    @map("raw_payload")
@@ -277,12 +321,17 @@ model PainHypothesis {
 }
 
 model LeadScore {
-  id              String   @id @default(cuid())
-  companyId       String   @map("company_id")
-  totalScore      Int      @map("total_score")
-  componentScores Json     @map("component_scores")
-  explanation     String
-  modelProvider   SourceProvider? @map("model_provider")
+  id                   String   @id @default(cuid())
+  companyId            String   @map("company_id")
+  totalScore           Int      @map("total_score")
+  componentScores      Json     @map("component_scores")
+  explanation          String
+  confidence           Float?   @map("confidence")
+  rationale            String?
+  recommendedAction    String?  @map("recommended_action")
+  recommendedChannel   String?  @map("recommended_channel")
+  recommendedContactId String?  @map("recommended_contact_id")
+  modelProvider        SourceProvider? @map("model_provider")
   modelName       String?  @map("model_name")
   rawPayload      Json?    @map("raw_payload")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -302,6 +351,8 @@ model LeadMagnet {
   whyItMatchesTheLead     String   @map("why_it_matches_the_lead")
   suggestedDeliveryFormat String   @map("suggested_delivery_format")
   estimatedTimeToPrepare  String   @map("estimated_time_to_prepare")
+  suggestedOutreachMention String? @map("suggested_outreach_mention")
+  contentBody             String?  @map("content_body")
   rawPayload              Json?    @map("raw_payload")
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
@@ -329,6 +380,8 @@ model OutreachDraft {
   approvalStatus    ApprovalStatus @default(PENDING_APPROVAL) @map("approval_status")
   approvalNotes     String?  @map("approval_notes")
   approvedAt        DateTime? @map("approved_at")
+  scheduledSendAt   DateTime? @map("scheduled_send_at")
+  sequenceStatus    String?   @map("sequence_status")
   rawPayload        Json?    @map("raw_payload")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -347,6 +400,7 @@ model OutreachDraft {
   @@index([approvalStatus])
   @@index([draftType])
   @@index([parentDraftId])
+  @@index([scheduledSendAt, sequenceStatus])
   @@unique([parentDraftId, draftType, sequenceStep])
   @@map("outreach_drafts")
 }
@@ -571,6 +625,42 @@ model SheetSyncRecord {
   @@index([outreachDraftId])
   @@index([syncStatus])
   @@map("sheet_sync_records")
+}
+
+model QaCheckResult {
+  id              String          @id @default(cuid())
+  outreachDraftId String          @map("outreach_draft_id")
+  passed          Boolean
+  issues          Json
+  revisedFields   Json?           @map("revised_fields")
+  modelProvider   SourceProvider? @map("model_provider")
+  rawPayload      Json?           @map("raw_payload")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([outreachDraftId])
+  @@map("qa_check_results")
+}
+
+model ReplyAnalysis {
+  id                  String              @id @default(cuid())
+  engagementEventId   String              @unique @map("engagement_event_id")
+  outreachDraftId     String              @map("outreach_draft_id")
+  classification      ReplyClassification
+  confidence          Float
+  summary             String
+  suggestedAction     String              @map("suggested_action")
+  shouldStopFollowUps Boolean             @map("should_stop_follow_ups")
+  replyDraftSubject   String?             @map("reply_draft_subject")
+  replyDraftBody      String?             @map("reply_draft_body")
+  modelProvider       SourceProvider?     @map("model_provider")
+  rawPayload          Json?               @map("raw_payload")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  @@index([outreachDraftId])
+  @@index([classification])
+  @@map("reply_analyses")
 }
 
 model GoogleWorkspaceConnection {

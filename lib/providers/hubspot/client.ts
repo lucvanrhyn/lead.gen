@@ -1,3 +1,9 @@
+import {
+  buildDealNoteBody,
+  buildDealProperties,
+  mapLeadStateToDealStage,
+} from "@/lib/domain/hubspot-lifecycle";
+
 const HUBSPOT_BASE_URL = "https://api.hubapi.com";
 
 type FetchLike = typeof fetch;
@@ -11,6 +17,8 @@ type HubSpotCompanyInput = {
   normalizedDomain?: string | null;
   phone?: string | null;
   industry?: string | null;
+  employeeCount?: number | null;
+  description?: string | null;
 };
 
 type HubSpotContactInput = {
@@ -214,6 +222,9 @@ export function buildHubSpotCompanyUpsertPayload(company: HubSpotCompanyInput) {
       website: company.website ?? undefined,
       phone: company.phone ?? undefined,
       industry: company.industry ?? undefined,
+      numberofemployees:
+        company.employeeCount != null ? String(company.employeeCount) : undefined,
+      description: company.description ?? undefined,
     }),
   } satisfies HubSpotCreatePayload;
 }
@@ -469,4 +480,178 @@ export async function syncOutreachDraftToHubSpot(
     contactCreated,
     noteId,
   };
+}
+
+export async function upsertHubSpotDeal(
+  input: {
+    companyName: string;
+    companyHubSpotId: string;
+    contactHubSpotId?: string;
+    dealProperties: Record<string, string>;
+  },
+  options: {
+    env?: HubSpotEnv;
+    fetchImpl?: FetchLike;
+  } = {},
+): Promise<{ dealId: string; created: boolean }> {
+  const env = options.env ?? process.env;
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const deal = await upsertHubSpotObject(fetchImpl, env, {
+    searchPath: "/crm/v3/objects/deals/search",
+    searchPayload: {
+      filterGroups: [
+        {
+          filters: [
+            {
+              propertyName: "dealname",
+              operator: "EQ",
+              value: `Outreach: ${input.companyName}`,
+            },
+          ],
+        },
+      ],
+      limit: 1,
+      properties: ["dealname", "dealstage", "pipeline"],
+    },
+    createPath: "/crm/v3/objects/deals",
+    updatePath: (id) => `/crm/v3/objects/deals/${id}`,
+    createPayload: { properties: input.dealProperties },
+  });
+
+  await fetchHubSpotJson(
+    fetchImpl,
+    `/crm/v4/objects/deal/${deal.id}/associations/default/company/${input.companyHubSpotId}`,
+    { method: "PUT" },
+    env,
+  );
+
+  if (input.contactHubSpotId) {
+    await fetchHubSpotJson(
+      fetchImpl,
+      `/crm/v4/objects/deal/${deal.id}/associations/default/contact/${input.contactHubSpotId}`,
+      { method: "PUT" },
+      env,
+    );
+  }
+
+  return { dealId: deal.id, created: deal.created };
+}
+
+export type ProgressHubSpotDealStageResult =
+  | { dealId: string; noteId?: string }
+  | { skipped: true; reason: string };
+
+export async function progressHubSpotDealStage(
+  input: {
+    company: {
+      name: string;
+      website?: string | null;
+      normalizedDomain?: string | null;
+      phone?: string | null;
+      industry?: string | null;
+      employeeCount?: number | null;
+      description?: string | null;
+    };
+    contact?: {
+      email?: string | null;
+      fullName?: string | null;
+    } | null;
+    stage: string;
+    context: {
+      leadScore?: number | null;
+      painSummary?: string | null;
+      confidence?: number | null;
+      outreachStatus?: string | null;
+      replyClassification?: string | null;
+      leadMagnetUsed?: string | null;
+      recommendedChannel?: string | null;
+    };
+  },
+  options: {
+    env?: HubSpotEnv;
+    fetchImpl?: FetchLike;
+  } = {},
+): Promise<ProgressHubSpotDealStageResult> {
+  const env = options.env ?? process.env;
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  if (!isHubSpotConfigured(env)) {
+    return {
+      skipped: true,
+      reason: "HUBSPOT_PRIVATE_APP_TOKEN is not configured.",
+    };
+  }
+
+  const dealStage = mapLeadStateToDealStage(input.stage);
+
+  const company = await upsertHubSpotObject(fetchImpl, env, {
+    searchPath: "/crm/v3/objects/companies/search",
+    searchPayload: buildHubSpotCompanySearchPayload(input.company),
+    createPath: "/crm/v3/objects/companies",
+    updatePath: (id) => `/crm/v3/objects/companies/${id}`,
+    createPayload: buildHubSpotCompanyUpsertPayload(input.company),
+  });
+
+  let contactHubSpotId: string | undefined;
+
+  if (input.contact?.email) {
+    const contact = await upsertHubSpotObject(fetchImpl, env, {
+      searchPath: "/crm/v3/objects/contacts/search",
+      searchPayload: buildHubSpotContactSearchPayload({ email: input.contact.email }),
+      createPath: "/crm/v3/objects/contacts",
+      updatePath: (id) => `/crm/v3/objects/contacts/${id}`,
+      createPayload: buildHubSpotContactUpsertPayload({
+        email: input.contact.email,
+        fullName: input.contact.fullName ?? undefined,
+      }),
+    });
+
+    contactHubSpotId = contact.id || undefined;
+  }
+
+  const dealProperties = buildDealProperties({
+    companyName: input.company.name,
+    stage: dealStage,
+    ...input.context,
+  });
+
+  const { dealId } = await upsertHubSpotDeal(
+    {
+      companyName: input.company.name,
+      companyHubSpotId: company.id,
+      contactHubSpotId,
+      dealProperties,
+    },
+    { env, fetchImpl },
+  );
+
+  const noteBody = buildDealNoteBody({
+    companyName: input.company.name,
+    stage: dealStage,
+    ...input.context,
+  });
+
+  const note = await fetchHubSpotJson<{ id?: string }>(
+    fetchImpl,
+    "/crm/v3/objects/notes",
+    {
+      method: "POST",
+      body: JSON.stringify({ properties: { hs_note_body: noteBody } }),
+    },
+    env,
+  );
+
+  const noteId = note?.id;
+
+  if (noteId) {
+    await fetchHubSpotJson(
+      fetchImpl,
+      `/crm/v4/objects/notes/${noteId}/associations/default/deal/${dealId}`,
+      { method: "PUT" },
+      env,
+    );
+  }
+
+  return { dealId, noteId };
 }

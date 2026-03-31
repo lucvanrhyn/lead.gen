@@ -1,6 +1,8 @@
 import { EnrichmentStage, JobStatus, SourceProvider } from "@prisma/client";
 import { z } from "zod";
 
+import { callOpenAiResponsesApi } from "@/lib/ai/openai-client";
+
 export const leadMagnetSchema = z.object({
   title: z.string(),
   type: z.string(),
@@ -8,6 +10,8 @@ export const leadMagnetSchema = z.object({
   why_it_matches_the_lead: z.string(),
   suggested_delivery_format: z.string(),
   estimated_time_to_prepare: z.string(),
+  suggested_outreach_mention: z.string(),
+  content_body: z.string(),
 });
 
 const leadMagnetJsonSchema = {
@@ -20,6 +24,8 @@ const leadMagnetJsonSchema = {
     why_it_matches_the_lead: { type: "string" },
     suggested_delivery_format: { type: "string" },
     estimated_time_to_prepare: { type: "string" },
+    suggested_outreach_mention: { type: "string" },
+    content_body: { type: "string" },
   },
   required: [
     "title",
@@ -28,68 +34,10 @@ const leadMagnetJsonSchema = {
     "why_it_matches_the_lead",
     "suggested_delivery_format",
     "estimated_time_to_prepare",
+    "suggested_outreach_mention",
+    "content_body",
   ],
 } as const;
-
-function getOpenAiApiKey(apiKey?: string) {
-  const resolved = apiKey ?? process.env.OPENAI_API_KEY;
-
-  if (!resolved) {
-    throw new Error("OpenAI API key is required for lead magnet generation.");
-  }
-
-  return resolved;
-}
-
-function extractOutputText(payload: unknown) {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "output_text" in payload &&
-    typeof payload.output_text === "string"
-  ) {
-    return payload.output_text;
-  }
-
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "output" in payload &&
-    Array.isArray(payload.output)
-  ) {
-    for (const outputItem of payload.output) {
-      if (
-        outputItem &&
-        typeof outputItem === "object" &&
-        "content" in outputItem &&
-        Array.isArray(outputItem.content)
-      ) {
-        for (const contentItem of outputItem.content) {
-          if (
-            contentItem &&
-            typeof contentItem === "object" &&
-            "text" in contentItem &&
-            typeof contentItem.text === "string"
-          ) {
-            return contentItem.text;
-          }
-
-          if (
-            contentItem &&
-            typeof contentItem === "object" &&
-            "parsed" in contentItem &&
-            contentItem.parsed &&
-            typeof contentItem.parsed === "object"
-          ) {
-            return JSON.stringify(contentItem.parsed);
-          }
-        }
-      }
-    }
-  }
-
-  return null;
-}
 
 const LEAD_MAGNET_SYSTEM_PROMPT = `You are a B2B lead generation specialist creating personalized lead magnets for outreach campaigns.
 
@@ -104,6 +52,12 @@ Lead magnet types you can recommend:
 - "pricing strategy teardown" — for businesses whose pricing undercuts their value; delivered as a 1-page analysis
 - "referral system audit" — for service businesses that rely on word-of-mouth; delivered as a framework PDF
 - "local SEO audit" — for businesses with poor local search visibility; delivered as a simple report
+- "checklist" — actionable step-by-step checklist for a specific operational improvement
+- "mini audit" — focused review of one specific business area with findings and recommendations
+- "scorecard" — self-assessment tool the prospect can use to benchmark themselves
+- "benchmark summary" — industry comparison showing where the prospect stands vs peers
+- "question framework" — diagnostic questions that help the prospect identify their own gaps
+- "google form diagnostic" — interactive diagnostic form that qualifies and educates simultaneously
 - "research follow-up" — when evidence is insufficient; delivered as a plain-text evidence memo
 
 Rules:
@@ -112,7 +66,9 @@ Rules:
 - The summary must explain exactly what insights the prospect will receive and why it matters to THEM
 - why_it_matches_the_lead must reference the specific pain evidence and service angle — make it clear this was made for them
 - suggested_delivery_format must be concrete (e.g. "5-slide annotated PDF", "recorded Loom walkthrough + 1-page PDF")
-- estimated_time_to_prepare should be realistic (20-75 minutes)`;
+- estimated_time_to_prepare should be realistic (20-75 minutes)
+- suggested_outreach_mention: A natural 1-sentence hook for the outreach email to reference this lead magnet. It should feel conversational, not salesy. Example: "I put together a quick booking flow review for your practice — spotted a couple of things that might be costing you appointments."
+- content_body: For simpler formats (checklist, scorecard, question framework), provide the actual content. For complex formats (teardown, audit), provide a detailed outline of what would be included. This should be substantive — 200-500 words.`;
 
 export async function buildLeadMagnet(
   input: {
@@ -126,6 +82,11 @@ export async function buildLeadMagnet(
   options?: {
     apiKey?: string;
     fetchFn?: typeof fetch;
+    playbook?: {
+      preferredLeadMagnetTypes: string[];
+      offerAngles: string[];
+      messagingFocus: string;
+    } | null;
   },
 ) {
   if (input.insufficientEvidence) {
@@ -137,63 +98,43 @@ export async function buildLeadMagnet(
         "The current public evidence is too thin for a confident recommendation, so the best next asset is a research follow-up.",
       suggested_delivery_format: "Plain-text evidence memo",
       estimated_time_to_prepare: "20 minutes",
+      suggested_outreach_mention: `I've been researching ${input.companyName} and have a few observations to share when the timing is right.`,
+      content_body: "",
     });
   }
 
-  const apiKey = getOpenAiApiKey(options?.apiKey);
-  const fetchFn = options?.fetchFn ?? fetch;
-  const model = process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-4o";
+  const playbookLines =
+    options?.playbook
+      ? [
+          "Industry playbook context:",
+          `- Preferred lead magnet types: ${options.playbook.preferredLeadMagnetTypes.join(", ")}`,
+          `- Offer angles: ${options.playbook.offerAngles.join(", ")}`,
+          `- Messaging focus: ${options.playbook.messagingFocus}`,
+        ]
+      : [];
 
-  const response = await fetchFn("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      input: [
-        {
-          role: "system",
-          content: LEAD_MAGNET_SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: [
-            `Company: ${input.companyName}`,
-            input.industry ? `Industry: ${input.industry}` : null,
-            `Primary pain: ${input.primaryPain}`,
-            `Recommended lead magnet type: ${input.recommendedLeadMagnetType}`,
-            `Service angle: ${input.recommendedServiceAngle}`,
-            "Design a specific, personalised lead magnet for this company. Make the title, summary, and rationale specific to their situation — not generic.",
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "lead_magnet",
-          strict: true,
-          schema: leadMagnetJsonSchema,
-        },
-      },
-    }),
+  const userContent = [
+    `Company: ${input.companyName}`,
+    input.industry ? `Industry: ${input.industry}` : null,
+    `Primary pain: ${input.primaryPain}`,
+    `Recommended lead magnet type: ${input.recommendedLeadMagnetType}`,
+    `Service angle: ${input.recommendedServiceAngle}`,
+    "Design a specific, personalised lead magnet for this company. Make the title, summary, and rationale specific to their situation — not generic.",
+    ...playbookLines,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return callOpenAiResponsesApi({
+    envModelKey: "OPENAI_MODEL_PAIN_HYPOTHESIS",
+    systemPrompt: LEAD_MAGNET_SYSTEM_PROMPT,
+    userContent,
+    jsonSchemaName: "lead_magnet",
+    jsonSchema: leadMagnetJsonSchema,
+    zodSchema: leadMagnetSchema,
+    apiKey: options?.apiKey,
+    fetchFn: options?.fetchFn,
   });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI lead magnet request failed with status ${response.status}.`);
-  }
-
-  const payload = await response.json();
-  const outputText = extractOutputText(payload);
-
-  if (!outputText) {
-    throw new Error("OpenAI response did not contain structured output for lead magnet.");
-  }
-
-  return leadMagnetSchema.parse(JSON.parse(outputText));
 }
 
 function slugifySegment(value: string) {
@@ -231,6 +172,8 @@ export async function persistLeadMagnet(
       whyItMatchesTheLead: leadMagnet.why_it_matches_the_lead,
       suggestedDeliveryFormat: leadMagnet.suggested_delivery_format,
       estimatedTimeToPrepare: leadMagnet.estimated_time_to_prepare,
+      suggestedOutreachMention: leadMagnet.suggested_outreach_mention,
+      contentBody: leadMagnet.content_body || null,
       rawPayload: leadMagnet,
     },
   });

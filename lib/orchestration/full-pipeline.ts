@@ -7,19 +7,24 @@ import {
   type Prisma,
 } from "@prisma/client";
 
+import { extractBusinessContext, persistBusinessContext } from "@/lib/ai/business-context";
 import { buildDiagnosticFormBlueprint, persistDiagnosticFormBlueprint } from "@/lib/ai/diagnostic-form";
 import { buildLeadMagnet, persistLeadMagnet } from "@/lib/ai/lead-magnet";
 import {
   buildCampaignAnalytics,
-  buildOutreachDraft,
   evaluateOutreachSuppression,
+  generateOutreachDraft,
+  mapLlmOutreachToOutreachSchema,
   persistOutreachDraft,
   type OutreachSuppressionReason,
 } from "@/lib/ai/outreach";
 import { generatePainHypothesis, persistPainHypothesis } from "@/lib/ai/pain-hypothesis";
-import { persistLeadScore, scoreLeadContext } from "@/lib/ai/lead-score";
+import { generateLeadScore, persistLeadScore, scoreLeadContext } from "@/lib/ai/lead-score";
+import { runQaCheck, persistQaCheckResult } from "@/lib/ai/qa-check";
+import { resolvePlaybook } from "@/lib/config/playbooks";
 import { db } from "@/lib/db";
 import { createLiveDiagnosticFormLink } from "@/lib/domain/diagnostic-form-links";
+import { createFollowUpSkeletons } from "@/lib/domain/follow-up-scheduler";
 import { enrichApolloCompanyAndContacts } from "@/lib/providers/apollo/client";
 import {
   extractLeadWebsitePages,
@@ -223,15 +228,54 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
-    let painHypothesis: Awaited<ReturnType<typeof generatePainHypothesis>>;
+    // Resolve industry playbook
+    const playbook = resolvePlaybook(companyWithEvidence.industry);
 
+    // Business context extraction
+    let businessContext: Awaited<ReturnType<typeof extractBusinessContext>> | null = null;
     try {
-      painHypothesis = await generatePainHypothesis({
+      businessContext = await extractBusinessContext({
         companyName: companyWithEvidence.name,
         website: companyWithEvidence.website,
         industry: companyWithEvidence.industry,
         crawlPages: companyWithEvidence.crawlPages,
       });
+      await persistBusinessContext(companyWithEvidence.id, businessContext);
+      stages.push({ stage: "business-context", status: JobStatus.SUCCEEDED });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Business context extraction failed.";
+      stages.push({ stage: "business-context", status: JobStatus.FAILED, error: message });
+      // Non-fatal — continue pipeline without business context
+    }
+
+    let painHypothesis: Awaited<ReturnType<typeof generatePainHypothesis>>;
+
+    try {
+      painHypothesis = await generatePainHypothesis(
+        {
+          companyName: companyWithEvidence.name,
+          website: companyWithEvidence.website,
+          industry: companyWithEvidence.industry,
+          crawlPages: companyWithEvidence.crawlPages,
+        },
+        {
+          businessContext: businessContext
+            ? {
+                website_summary: businessContext.website_summary,
+                services_offerings: businessContext.services_offerings,
+                customer_type: businessContext.customer_type,
+                urgency_signals: businessContext.urgency_signals,
+              }
+            : null,
+          playbook: playbook
+            ? {
+                commonPains: playbook.commonPains,
+                offerAngles: playbook.offerAngles,
+                messagingFocus: playbook.messagingFocus,
+              }
+            : null,
+        },
+      );
       await persistPainHypothesis(companyId, painHypothesis);
       stages.push({
         stage: "pain-hypothesis",
@@ -260,29 +304,59 @@ export async function runCompanyFullPipeline(companyId: string) {
       };
     }
 
+    let llmScore: Awaited<ReturnType<typeof generateLeadScore>>;
+
     try {
-      const score = scoreLeadContext({
-        hasIndustry: Boolean(companyWithEvidence.industry),
+      llmScore = await generateLeadScore({
+        companyName: companyWithEvidence.name,
+        website: companyWithEvidence.website,
+        industry: companyWithEvidence.industry,
         employeeCount: companyWithEvidence.employeeCount,
-        hasWebsite: Boolean(companyWithEvidence.website),
-        hasPhone: Boolean(companyWithEvidence.phone),
-        hasLocation: Boolean(companyWithEvidence.locationSummary),
-        contacts: companyWithEvidence.contacts.map((contact) => ({
-          hasEmail: Boolean(contact.email),
-          hasPhone: Boolean(contact.phone),
-          decisionMakerConfidence: contact.decisionMakerConfidence,
+        description: companyWithEvidence.description,
+        contacts: companyWithEvidence.contacts.map((c) => ({
+          fullName: c.fullName,
+          title: c.title,
+          email: c.email,
+          phone: c.phone,
+          seniority: c.seniority,
+          decisionMakerConfidence: c.decisionMakerConfidence,
         })),
-        painConfidence: painHypothesis.confidence_score,
-        painEvidenceCount: painHypothesis.evidence.length,
-        insufficientEvidence: painHypothesis.insufficient_evidence,
+        painHypothesis: {
+          primary_pain: painHypothesis.primary_pain,
+          confidence_score: painHypothesis.confidence_score,
+          business_impact: painHypothesis.business_impact,
+          company_summary: painHypothesis.company_summary,
+          observed_signals: painHypothesis.observed_signals,
+          best_outreach_angle: painHypothesis.best_outreach_angle,
+          insufficient_evidence: painHypothesis.insufficient_evidence,
+        },
+        businessContext: businessContext
+          ? {
+              website_summary: businessContext.website_summary,
+              services_offerings: businessContext.services_offerings,
+              customer_type: businessContext.customer_type,
+              urgency_signals: businessContext.urgency_signals,
+              weak_lead_capture_signals: businessContext.weak_lead_capture_signals,
+            }
+          : null,
+        playbook: playbook
+          ? {
+              commonPains: playbook.commonPains,
+              messagingFocus: playbook.messagingFocus,
+            }
+          : null,
       });
-      await persistLeadScore(companyId, score);
+      // Resolve recommended contact
+      const recommendedContact =
+        companyWithEvidence.contacts[llmScore.recommended_primary_contact_index] ??
+        companyWithEvidence.contacts[0];
+      await persistLeadScore(companyId, llmScore, recommendedContact?.id);
       stages.push({ stage: "score", status: JobStatus.SUCCEEDED });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Lead scoring failed.";
       await persistPipelineStageOutcome({
         companyId,
-        provider: SourceProvider.SYSTEM,
+        provider: SourceProvider.OPENAI,
         stage: EnrichmentStage.LEAD_SCORING,
         status: JobStatus.FAILED,
         error: message,
@@ -304,14 +378,25 @@ export async function runCompanyFullPipeline(companyId: string) {
     let persistedLeadMagnet: Awaited<ReturnType<typeof persistLeadMagnet>>;
 
     try {
-      leadMagnet = await buildLeadMagnet({
-        companyName: companyWithEvidence.name,
-        industry: companyWithEvidence.industry,
-        primaryPain: painHypothesis.primary_pain,
-        recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
-        recommendedServiceAngle: painHypothesis.recommended_service_angle,
-        insufficientEvidence: painHypothesis.insufficient_evidence,
-      });
+      leadMagnet = await buildLeadMagnet(
+        {
+          companyName: companyWithEvidence.name,
+          industry: companyWithEvidence.industry,
+          primaryPain: painHypothesis.primary_pain,
+          recommendedLeadMagnetType: painHypothesis.recommended_lead_magnet_type,
+          recommendedServiceAngle: painHypothesis.recommended_service_angle,
+          insufficientEvidence: painHypothesis.insufficient_evidence,
+        },
+        {
+          playbook: playbook
+            ? {
+                preferredLeadMagnetTypes: playbook.preferredLeadMagnetTypes,
+                offerAngles: playbook.offerAngles,
+                messagingFocus: playbook.messagingFocus,
+              }
+            : null,
+        },
+      );
       persistedLeadMagnet = await persistLeadMagnet(companyId, leadMagnet);
       stages.push({ stage: "lead-magnet", status: JobStatus.SUCCEEDED });
     } catch (error) {
@@ -499,20 +584,97 @@ export async function runCompanyFullPipeline(companyId: string) {
         continue;
       }
 
-      const outreach = buildOutreachDraft({
+      const llmOutreach = await generateOutreachDraft({
         companyName: companyWithEvidence.name,
-        contactName: contact.firstName ?? contact.fullName ?? undefined,
-        pain: painHypothesis.primary_pain,
-        leadMagnetTitle: leadMagnet.title,
-        serviceAngle: painHypothesis.recommended_service_angle,
-        diagnosticFormCta: {
-          mode: "lead_magnet_and_form",
-          short: diagnosticForm.outreach_cta_short,
-          medium: diagnosticForm.outreach_cta_medium,
+        contactName: contact.firstName ?? contact.fullName,
+        contactTitle: contact.title,
+        painHypothesis: {
+          primary_pain: painHypothesis.primary_pain,
+          company_summary: painHypothesis.company_summary,
+          best_outreach_angle: painHypothesis.best_outreach_angle,
+          confidence_score: painHypothesis.confidence_score,
+          caution_do_not_claim: painHypothesis.caution_do_not_claim,
         },
+        leadMagnet: {
+          title: leadMagnet.title,
+          type: leadMagnet.type,
+          suggested_outreach_mention: leadMagnet.suggested_outreach_mention,
+        },
+        businessContext: businessContext
+          ? {
+              website_summary: businessContext.website_summary,
+              services_offerings: businessContext.services_offerings,
+              customer_type: businessContext.customer_type,
+            }
+          : null,
+        leadScore: {
+          total_score: llmScore.total_score,
+          recommended_action: llmScore.recommended_action,
+          recommended_channel: llmScore.recommended_channel,
+        },
+        playbook: playbook
+          ? {
+              messagingFocus: playbook.messagingFocus,
+              ctaPreferences: playbook.ctaPreferences,
+              toneGuidance: playbook.toneGuidance,
+              doNotMention: playbook.doNotMention,
+            }
+          : null,
+        diagnosticFormCta: diagnosticForm
+          ? {
+              mode: "lead_magnet_and_form",
+              short: diagnosticForm.outreach_cta_short,
+              medium: diagnosticForm.outreach_cta_medium,
+            }
+          : null,
       });
+      let outreach = mapLlmOutreachToOutreachSchema(llmOutreach);
 
-      await persistOutreachDraft({
+      // QA check
+      let qaResult: Awaited<ReturnType<typeof runQaCheck>> | null = null;
+      try {
+        qaResult = await runQaCheck({
+          outreachDraft: {
+            emailSubject1: outreach.email_subject_1,
+            emailSubject2: outreach.email_subject_2,
+            coldEmailShort: outreach.cold_email_short,
+            coldEmailMedium: outreach.cold_email_medium,
+            linkedinMessageSafe: outreach.linkedin_message_safe,
+            followUp1: outreach.follow_up_1,
+            followUp2: outreach.follow_up_2,
+          },
+          companyName: companyWithEvidence.name,
+          contactName: contact.firstName ?? contact.fullName,
+          painHypothesis: {
+            primary_pain: painHypothesis.primary_pain,
+            company_summary: painHypothesis.company_summary,
+            confidence_score: painHypothesis.confidence_score,
+            caution_do_not_claim: painHypothesis.caution_do_not_claim,
+          },
+          businessContext: businessContext
+            ? {
+                website_summary: businessContext.website_summary,
+                services_offerings: businessContext.services_offerings,
+              }
+            : null,
+        });
+
+        // Apply QA revisions if there are blockers with fixes
+        if (qaResult && !qaResult.passed && Object.keys(qaResult.revised_fields).length > 0) {
+          const revised = qaResult.revised_fields;
+          if (revised.cold_email_medium) outreach = { ...outreach, cold_email_medium: revised.cold_email_medium };
+          if (revised.cold_email_short) outreach = { ...outreach, cold_email_short: revised.cold_email_short };
+          if (revised.linkedin_message_safe) outreach = { ...outreach, linkedin_message_safe: revised.linkedin_message_safe };
+          if (revised.email_subject_1) outreach = { ...outreach, email_subject_1: revised.email_subject_1 };
+          if (revised.email_subject_2) outreach = { ...outreach, email_subject_2: revised.email_subject_2 };
+          if (revised.follow_up_1) outreach = { ...outreach, follow_up_1: revised.follow_up_1 };
+          if (revised.follow_up_2) outreach = { ...outreach, follow_up_2: revised.follow_up_2 };
+        }
+      } catch {
+        // QA is advisory — don't block pipeline
+      }
+
+      const persistedDraft = await persistOutreachDraft({
         companyId,
         companyName: companyWithEvidence.name,
         leadMagnet: {
@@ -530,6 +692,30 @@ export async function runCompanyFullPipeline(companyId: string) {
           title: "title" in contact ? contact.title : undefined,
         },
       });
+
+      // Persist QA result (non-fatal)
+      if (qaResult) {
+        try {
+          await persistQaCheckResult(persistedDraft.id, qaResult);
+        } catch {
+          // QA persistence failure is non-fatal
+        }
+      }
+
+      // Create follow-up sequence skeletons
+      try {
+        await createFollowUpSkeletons(
+          {
+            id: persistedDraft.id,
+            companyId,
+            contactId: contact.id,
+            createdAt: new Date(),
+          },
+          db,
+        );
+      } catch {
+        // Follow-up creation failure is non-fatal
+      }
 
       campaignDrafts.push({
         id: `generated-${contact.id}`,

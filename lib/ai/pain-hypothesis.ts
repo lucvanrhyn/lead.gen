@@ -1,7 +1,10 @@
 import { EnrichmentStage, JobStatus, SourceProvider } from "@prisma/client";
 import { z } from "zod";
 
+import { callOpenAiResponsesApi } from "@/lib/ai/openai-client";
+
 export const painHypothesisSchema = z.object({
+  // Existing fields (backward compat)
   primary_pain: z.string(),
   secondary_pains: z.array(z.string()),
   evidence: z.array(
@@ -18,6 +21,25 @@ export const painHypothesisSchema = z.object({
   recommended_service_angle: z.string(),
   recommended_lead_magnet_type: z.string(),
   insufficient_evidence: z.boolean(),
+  // New structured fields
+  company_summary: z.string(),
+  observed_signals: z.array(
+    z.object({
+      signal: z.string(),
+      source: z.string(),
+      confidence: z.number(),
+      category: z.enum(["observed", "inferred", "speculative"]),
+    }),
+  ),
+  likely_pains: z.array(
+    z.object({
+      pain: z.string(),
+      category: z.enum(["observed", "inferred", "speculative"]),
+      evidence_refs: z.array(z.string()),
+    }),
+  ),
+  best_outreach_angle: z.string(),
+  caution_do_not_claim: z.array(z.string()),
 });
 
 export const painHypothesisJsonSchema = {
@@ -55,6 +77,42 @@ export const painHypothesisJsonSchema = {
     recommended_service_angle: { type: "string" },
     recommended_lead_magnet_type: { type: "string" },
     insufficient_evidence: { type: "boolean" },
+    company_summary: { type: "string" },
+    observed_signals: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          signal: { type: "string" },
+          source: { type: "string" },
+          confidence: { type: "number" },
+          category: { type: "string", enum: ["observed", "inferred", "speculative"] },
+        },
+        required: ["signal", "source", "confidence", "category"],
+      },
+    },
+    likely_pains: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          pain: { type: "string" },
+          category: { type: "string", enum: ["observed", "inferred", "speculative"] },
+          evidence_refs: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: ["pain", "category", "evidence_refs"],
+      },
+    },
+    best_outreach_angle: { type: "string" },
+    caution_do_not_claim: {
+      type: "array",
+      items: { type: "string" },
+    },
   },
   required: [
     "primary_pain",
@@ -65,6 +123,11 @@ export const painHypothesisJsonSchema = {
     "recommended_service_angle",
     "recommended_lead_magnet_type",
     "insufficient_evidence",
+    "company_summary",
+    "observed_signals",
+    "likely_pains",
+    "best_outreach_angle",
+    "caution_do_not_claim",
   ],
 } as const;
 
@@ -87,110 +150,7 @@ type PainHypothesisContext = {
   }>;
 };
 
-function getOpenAiApiKey(apiKey?: string) {
-  const resolved = apiKey ?? process.env.OPENAI_API_KEY;
-
-  if (!resolved) {
-    throw new Error("OpenAI API key is required for pain hypothesis generation.");
-  }
-
-  return resolved;
-}
-
-function buildEvidenceContext(context: PainHypothesisContext) {
-  return context.crawlPages
-    .filter((page) => page.markdown)
-    .map((page) => `Page (${page.pageType}) ${page.url}\n${page.markdown}`)
-    .join("\n\n");
-}
-
-export function buildInsufficientEvidencePainHypothesis(companyName: string) {
-  return {
-    primary_pain: `Insufficient public evidence to identify a confident pain for ${companyName}`,
-    secondary_pains: [],
-    evidence: [],
-    business_impact:
-      "Not enough public evidence is available yet to estimate business impact confidently.",
-    confidence_score: 0.18,
-    recommended_service_angle: "Gather more public evidence before recommending a service angle.",
-    recommended_lead_magnet_type: "research follow-up",
-    insufficient_evidence: true,
-  };
-}
-
-function extractOutputText(payload: unknown) {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "output_text" in payload &&
-    typeof payload.output_text === "string"
-  ) {
-    return payload.output_text;
-  }
-
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "output" in payload &&
-    Array.isArray(payload.output)
-  ) {
-    for (const outputItem of payload.output) {
-      if (
-        outputItem &&
-        typeof outputItem === "object" &&
-        "content" in outputItem &&
-        Array.isArray(outputItem.content)
-      ) {
-        for (const contentItem of outputItem.content) {
-          if (
-            contentItem &&
-            typeof contentItem === "object" &&
-            "text" in contentItem &&
-            typeof contentItem.text === "string"
-          ) {
-            return contentItem.text;
-          }
-
-          if (
-            contentItem &&
-            typeof contentItem === "object" &&
-            "parsed" in contentItem &&
-            contentItem.parsed &&
-            typeof contentItem.parsed === "object"
-          ) {
-            return JSON.stringify(contentItem.parsed);
-          }
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-export async function generatePainHypothesis(
-  context: PainHypothesisContext,
-  options?: {
-    apiKey?: string;
-    fetchFn?: typeof fetch;
-  },
-) {
-  const evidenceContext = buildEvidenceContext(context);
-
-  if (!evidenceContext.trim()) {
-    return buildInsufficientEvidencePainHypothesis(context.companyName);
-  }
-
-  const apiKey = getOpenAiApiKey(options?.apiKey);
-  const fetchFn = options?.fetchFn ?? fetch;
-  const model = process.env.OPENAI_MODEL_PAIN_HYPOTHESIS ?? "gpt-4o";
-
-  const body = JSON.stringify({
-    model,
-    input: [
-      {
-        role: "system",
-        content: `You are a B2B sales intelligence agent that analyses public evidence to identify the most likely pain point a company is experiencing and assess lead quality.
+const PAIN_HYPOTHESIS_SYSTEM_PROMPT = `You are a B2B sales intelligence agent that analyses public evidence to identify the most likely pain point a company is experiencing and assess lead quality.
 
 Your output must be evidence-backed. Never invent evidence. Every claim must cite public signals only.
 
@@ -210,71 +170,120 @@ Recommended lead magnet types (choose the one that directly addresses the identi
 - "local SEO audit" — poor local search visibility
 - "research follow-up" — insufficient evidence to identify a specific pain
 
-The recommended_service_angle must be a concrete, 1-sentence value proposition that connects the pain to a service offering.`,
-      },
-      {
-        role: "user",
-        content: [
-          `Company: ${context.companyName}`,
-          context.website ? `Website: ${context.website}` : null,
-          context.industry ? `Industry: ${context.industry}` : null,
-          "Public evidence:",
-          evidenceContext,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "pain_hypothesis",
-        strict: true,
-        schema: painHypothesisJsonSchema,
-      },
-    },
+The recommended_service_angle must be a concrete, 1-sentence value proposition that connects the pain to a service offering.
+
+## Structured reasoning framework
+
+You MUST explicitly categorize every signal and pain point:
+- "observed": Directly stated or clearly visible on the website (e.g., "No booking form on contact page")
+- "inferred": Reasonable conclusion from observed evidence (e.g., "Likely losing bookings because contact page only has a phone number")
+- "speculative": Possible but not directly supported (e.g., "May be experiencing staff scheduling issues")
+
+For company_summary: Write a factual 1-2 sentence description of what the business does, based only on what you can see.
+
+For observed_signals: List each distinct signal with its source URL and your confidence.
+
+For likely_pains: List each pain point with its category and which observed_signals support it.
+
+For best_outreach_angle: The single most promising angle for a cold outreach message.
+
+For caution_do_not_claim: List anything that should NOT be stated as fact in outreach (things you inferred or speculated about).`;
+
+function buildEvidenceContext(context: PainHypothesisContext) {
+  return context.crawlPages
+    .filter((page) => page.markdown)
+    .map((page) => `Page (${page.pageType}) ${page.url}\n${page.markdown}`)
+    .join("\n\n");
+}
+
+export function buildInsufficientEvidencePainHypothesis(companyName: string) {
+  return {
+    primary_pain: `Insufficient public evidence to identify a confident pain for ${companyName}`,
+    secondary_pains: [],
+    evidence: [],
+    business_impact:
+      "Not enough public evidence is available yet to estimate business impact confidently.",
+    confidence_score: 0.18,
+    recommended_service_angle: "Gather more public evidence before recommending a service angle.",
+    recommended_lead_magnet_type: "research follow-up",
+    insufficient_evidence: true,
+    company_summary: `Insufficient data available for ${companyName}`,
+    observed_signals: [],
+    likely_pains: [],
+    best_outreach_angle: "Gather more evidence before crafting an outreach angle.",
+    caution_do_not_claim: ["All claims about this company — insufficient evidence available."],
+  };
+}
+
+export async function generatePainHypothesis(
+  context: PainHypothesisContext,
+  options?: {
+    apiKey?: string;
+    fetchFn?: typeof fetch;
+    businessContext?: {
+      website_summary: string;
+      services_offerings: string[];
+      customer_type: string;
+      urgency_signals: string[];
+    } | null;
+    playbook?: {
+      commonPains: string[];
+      offerAngles: string[];
+      messagingFocus: string;
+    } | null;
+  },
+) {
+  const evidenceContext = buildEvidenceContext(context);
+
+  if (!evidenceContext.trim()) {
+    return buildInsufficientEvidencePainHypothesis(context.companyName);
+  }
+
+  const parts: (string | null)[] = [
+    `Company: ${context.companyName}`,
+    context.website ? `Website: ${context.website}` : null,
+    context.industry ? `Industry: ${context.industry}` : null,
+    "Public evidence:",
+    evidenceContext,
+  ];
+
+  if (options?.businessContext) {
+    const bc = options.businessContext;
+    parts.push(
+      [
+        "Business context (pre-extracted):",
+        `- Summary: ${bc.website_summary}`,
+        `- Services: ${bc.services_offerings.join(", ")}`,
+        `- Customer type: ${bc.customer_type}`,
+        `- Urgency signals: ${bc.urgency_signals.join(", ")}`,
+      ].join("\n"),
+    );
+  }
+
+  if (options?.playbook) {
+    const pb = options.playbook;
+    parts.push(
+      [
+        "Industry playbook context:",
+        `- Common pains in this industry: ${pb.commonPains.join(", ")}`,
+        `- Offer angles: ${pb.offerAngles.join(", ")}`,
+        `- Messaging focus: ${pb.messagingFocus}`,
+      ].join("\n"),
+    );
+  }
+
+  const userContent = parts.filter(Boolean).join("\n\n");
+
+  return callOpenAiResponsesApi({
+    envModelKey: "OPENAI_MODEL_PAIN_HYPOTHESIS",
+    systemPrompt: PAIN_HYPOTHESIS_SYSTEM_PROMPT,
+    userContent,
+    jsonSchemaName: "pain_hypothesis",
+    jsonSchema: painHypothesisJsonSchema,
+    zodSchema: painHypothesisSchema,
+    apiKey: options?.apiKey,
+    fetchFn: options?.fetchFn,
   });
-
-  // Retry up to 3 times with backoff on rate limit or server errors.
-  let response: Response | undefined;
-  let lastError: Error | undefined;
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    response = await fetchFn("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body,
-    });
-
-    if (response.ok) break;
-
-    if (response.status === 429 || response.status >= 500) {
-      lastError = new Error(`OpenAI pain hypothesis request failed with status ${response.status}.`);
-
-      if (attempt < 3) {
-        await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
-        continue;
-      }
-    }
-
-    break;
-  }
-
-  if (!response?.ok) {
-    throw lastError ?? new Error(`OpenAI pain hypothesis request failed with status ${response?.status}.`);
-  }
-
-  const payload = await response.json();
-  const outputText = extractOutputText(payload);
-
-  if (!outputText) {
-    throw new Error("OpenAI response did not contain structured output text.");
-  }
-
-  return painHypothesisSchema.parse(JSON.parse(outputText));
 }
 
 export async function persistPainHypothesis(
@@ -294,6 +303,12 @@ export async function persistPainHypothesis(
       recommendedServiceAngle: hypothesis.recommended_service_angle,
       recommendedLeadMagnetType: hypothesis.recommended_lead_magnet_type,
       insufficientEvidence: hypothesis.insufficient_evidence,
+      companySummary: hypothesis.company_summary,
+      observedFacts: hypothesis.observed_signals,
+      reasonableInferences: hypothesis.likely_pains.filter((p) => p.category === "inferred"),
+      speculativeAssumptions: hypothesis.likely_pains.filter((p) => p.category === "speculative"),
+      bestOutreachAngle: hypothesis.best_outreach_angle,
+      cautionNotes: hypothesis.caution_do_not_claim,
       modelProvider: SourceProvider.OPENAI,
       rawPayload: hypothesis,
     },

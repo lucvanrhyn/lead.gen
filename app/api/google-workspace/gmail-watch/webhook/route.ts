@@ -105,6 +105,7 @@ export async function POST(request: Request) {
           },
           include: {
             gmailDraftLink: true,
+            company: { select: { id: true, name: true } },
             childDrafts: {
               where: {
                 draftType: "FOLLOW_UP",
@@ -147,6 +148,69 @@ export async function POST(request: Request) {
 
       if (result.replyEventCreated) {
         replyEventsCreated += 1;
+
+        // Classify the reply and generate a suggested response
+        try {
+          const { classifyReply, persistReplyAnalysis } = await import("@/lib/ai/reply-classification");
+          const { generateReplyDraft } = await import("@/lib/ai/reply-draft");
+          const { determineReplyActions } = await import("@/lib/domain/reply-actions");
+
+          const threadMessages = thread.messages.map((msg) => ({
+            direction: msg.direction as "INBOUND" | "OUTBOUND",
+            from: msg.from ?? msg.fromEmail ?? "",
+            subject: msg.subject ?? undefined,
+            body: msg.snippet ?? "",
+            sentAt: msg.internalDate ?? undefined,
+          }));
+
+          const companyName = draft.company.name;
+
+          const classification = await classifyReply({
+            threadMessages,
+            originalSubject: draft.emailSubject1,
+            companyName,
+          });
+
+          const actions = determineReplyActions(classification.classification);
+
+          // Update company lead state if needed
+          if (actions.leadStateUpdate) {
+            await db.company.update({
+              where: { id: draft.companyId },
+              data: { leadState: actions.leadStateUpdate },
+            });
+          }
+
+          // Generate reply draft if needed
+          let replyDraft: { subject: string; body: string } | null = null;
+          if (actions.generateReplyDraft) {
+            const draftResult = await generateReplyDraft({
+              classification: classification.classification,
+              threadMessages,
+              companyName,
+              originalSubject: draft.emailSubject1,
+            });
+            replyDraft = { subject: draftResult.subject, body: draftResult.body };
+          }
+
+          // Find the engagement event ID created in this webhook cycle
+          const engagementEvent = await db.outreachEngagementEvent.findFirst({
+            where: { outreachDraftId: draft.id, eventType: "REPLY" },
+            orderBy: { occurredAt: "desc" },
+            select: { id: true },
+          });
+
+          if (engagementEvent) {
+            await persistReplyAnalysis({
+              engagementEventId: engagementEvent.id,
+              outreachDraftId: draft.id,
+              classification,
+              replyDraft,
+            });
+          }
+        } catch {
+          // Reply classification is advisory — don't fail the webhook
+        }
       }
     }
 

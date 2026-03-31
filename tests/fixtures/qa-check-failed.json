@@ -1,0 +1,30 @@
+{
+  "passed": false,
+  "issues": [
+    {
+      "field": "primary_email",
+      "issue_type": "unsupported_claim",
+      "description": "Email claims the practice is 'losing 30% of potential patients' but no evidence supports this specific figure.",
+      "severity": "blocker",
+      "suggested_fix": "Replace '30% of potential patients' with 'after-hours appointment requests' which is supported by the observed phone-only booking evidence."
+    },
+    {
+      "field": "linkedin_message",
+      "issue_type": "fake_personalization",
+      "description": "Message says 'I've been following your practice's growth' but there is no evidence of following or prior engagement.",
+      "severity": "blocker",
+      "suggested_fix": "Replace with 'I came across your practice while researching dental clinics in the area' which is honest and credible."
+    },
+    {
+      "field": "shorter_email_variant",
+      "issue_type": "weak_cta",
+      "description": "Email ends with 'Let me know your thoughts' which is vague and low-conversion.",
+      "severity": "warning",
+      "suggested_fix": "Replace with 'Would it be useful if I sent over the booking review?' — specific and low-friction."
+    }
+  ],
+  "revised_fields": {
+    "primary_email": "Hi Sarah,\n\nI was looking at Bright Smile Dental's website and noticed your contact page directs patients to call during office hours to book appointments.\n\nFor a practice your size, that likely means after-hours appointment requests may slip through.\n\nI put together a short booking flow review for your practice. It flags a couple of things that might be costing you appointments.\n\nWould it be useful if I sent it over?\n\nBest,\nLuc",
+    "linkedin_message": "Hi Sarah — I came across Bright Smile Dental while researching dental practices in the area. Noticed your patient booking is phone-only, which can create friction for after-hours requests. I put together a short booking flow review — happy to share if useful."
+  }
+}

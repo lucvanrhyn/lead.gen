@@ -2,6 +2,7 @@ import { EnrichmentStage, JobStatus, SourceProvider } from "@prisma/client";
 import { z } from "zod";
 
 import { persistLeadMagnetAsset } from "@/lib/ai/lead-magnet";
+import { callOpenAiResponsesApi } from "@/lib/ai/openai-client";
 import {
   deriveOutreachSuppressionReason,
   summarizeCampaignAnalytics,
@@ -54,7 +55,231 @@ export const followUpDraftSchema = z.object({
   follow_up_reason: z.enum(["open_only", "high_intent_click", "asset_view", "reply_stop"]),
 });
 
-export function buildOutreachDraft(input: {
+export const llmOutreachSchema = z.object({
+  subject_lines: z.array(z.string()).min(2).max(3),
+  primary_email: z.string(),
+  shorter_email_variant: z.string(),
+  linkedin_message: z.string(),
+  follow_up_variants: z.array(z.string()).min(2).max(3),
+  cta: z.string(),
+  rationale_for_angle: z.string(),
+});
+
+const LLM_OUTREACH_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "subject_lines",
+    "primary_email",
+    "shorter_email_variant",
+    "linkedin_message",
+    "follow_up_variants",
+    "cta",
+    "rationale_for_angle",
+  ],
+  properties: {
+    subject_lines: { type: "array", items: { type: "string" } },
+    primary_email: { type: "string" },
+    shorter_email_variant: { type: "string" },
+    linkedin_message: { type: "string" },
+    follow_up_variants: { type: "array", items: { type: "string" } },
+    cta: { type: "string" },
+    rationale_for_angle: { type: "string" },
+  },
+} as const;
+
+const LLM_OUTREACH_SYSTEM_PROMPT = `You are a B2B outreach copywriter specializing in cold email and LinkedIn messages for service businesses.
+
+Your job: Write personalized outreach content that opens a conversation. The prospect should feel like this was written specifically for them.
+
+Output requirements:
+- subject_lines: 2-3 options. Short (under 50 chars), specific, curiosity-driven. No clickbait. No ALL CAPS. No "Quick question" or "Reaching out".
+- primary_email: The full cold email body (80-150 words). Start with a specific observation about their business. Connect it to a likely pain. Offer the lead magnet as a value-first gesture. End with a low-friction CTA.
+- shorter_email_variant: Same angle, 40-80 words. For follow-up or busy recipients.
+- linkedin_message: 40-80 words. Professional, conversational. No pitch — just offer value.
+- follow_up_variants: 2-3 different follow-up angles:
+  1. Bump: Short, same thread, reference the original offer
+  2. Value-add: Different angle, mention a specific insight or the lead magnet
+  3. Soft close: Acknowledge silence, leave the door open gracefully
+- cta: The specific call-to-action used. Must be low-friction (e.g., "Happy to send it over if useful" not "Book a call").
+- rationale_for_angle: 1-2 sentences explaining why you chose this angle for this specific prospect.
+
+Rules:
+- NEVER use fake compliments ("I love your website", "Great company")
+- NEVER invent facts not present in the context
+- NEVER use "I noticed your company" without specifying WHAT you noticed
+- NEVER use spammy phrases: "game-changer", "unlock", "skyrocket", "revolutionary"
+- NEVER start with "I hope this email finds you well"
+- Reference ONLY observed or inferred facts from the pain hypothesis
+- The lead magnet mention should feel natural, not forced
+- Use the contact's first name if available
+- Keep tone professional but human — not corporate, not casual
+- CTA must be easy to say yes to (reply-based, not calendar-link-based)`;
+
+export async function generateOutreachDraft(
+  input: {
+    companyName: string;
+    contactName?: string | null;
+    contactTitle?: string | null;
+    painHypothesis: {
+      primary_pain: string;
+      company_summary?: string;
+      best_outreach_angle?: string;
+      confidence_score: number;
+      caution_do_not_claim?: string[];
+    };
+    leadMagnet: {
+      title: string;
+      type: string;
+      suggested_outreach_mention?: string;
+    };
+    businessContext?: {
+      website_summary: string;
+      services_offerings: string[];
+      customer_type: string;
+    } | null;
+    leadScore?: {
+      total_score: number;
+      recommended_action?: string;
+      recommended_channel?: string;
+    } | null;
+    playbook?: {
+      messagingFocus: string;
+      ctaPreferences: string[];
+      toneGuidance: string;
+      doNotMention: string[];
+    } | null;
+    diagnosticFormCta?: {
+      mode: string;
+      short: string;
+      medium: string;
+    } | null;
+  },
+  options?: {
+    apiKey?: string;
+    fetchFn?: typeof fetch;
+  },
+): Promise<z.infer<typeof llmOutreachSchema>> {
+  const sections: string[] = [
+    `Company: ${input.companyName}`,
+  ];
+
+  if (input.contactName ?? input.contactTitle) {
+    const parts = [
+      input.contactName ? `Name: ${input.contactName}` : null,
+      input.contactTitle ? `Title: ${input.contactTitle}` : null,
+    ].filter(Boolean);
+    sections.push(`Contact:\n${parts.join("\n")}`);
+  }
+
+  sections.push(
+    [
+      "Pain Hypothesis:",
+      `  primary_pain: ${input.painHypothesis.primary_pain}`,
+      input.painHypothesis.company_summary
+        ? `  company_summary: ${input.painHypothesis.company_summary}`
+        : null,
+      input.painHypothesis.best_outreach_angle
+        ? `  best_outreach_angle: ${input.painHypothesis.best_outreach_angle}`
+        : null,
+      `  confidence_score: ${input.painHypothesis.confidence_score}`,
+      input.painHypothesis.caution_do_not_claim?.length
+        ? `  caution_do_not_claim: ${input.painHypothesis.caution_do_not_claim.join(", ")}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  sections.push(
+    [
+      "Lead Magnet:",
+      `  title: ${input.leadMagnet.title}`,
+      `  type: ${input.leadMagnet.type}`,
+      input.leadMagnet.suggested_outreach_mention
+        ? `  suggested_outreach_mention: ${input.leadMagnet.suggested_outreach_mention}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  if (input.businessContext) {
+    sections.push(
+      [
+        "Business Context:",
+        `  website_summary: ${input.businessContext.website_summary}`,
+        `  services_offerings: ${input.businessContext.services_offerings.join(", ")}`,
+        `  customer_type: ${input.businessContext.customer_type}`,
+      ].join("\n"),
+    );
+  }
+
+  if (input.leadScore) {
+    const parts = [
+      `  total_score: ${input.leadScore.total_score}`,
+      input.leadScore.recommended_action
+        ? `  recommended_action: ${input.leadScore.recommended_action}`
+        : null,
+      input.leadScore.recommended_channel
+        ? `  recommended_channel: ${input.leadScore.recommended_channel}`
+        : null,
+    ].filter(Boolean);
+    sections.push(`Lead Score:\n${parts.join("\n")}`);
+  }
+
+  if (input.playbook) {
+    sections.push(
+      [
+        "Playbook:",
+        `  messagingFocus: ${input.playbook.messagingFocus}`,
+        `  ctaPreferences: ${input.playbook.ctaPreferences.join(", ")}`,
+        `  toneGuidance: ${input.playbook.toneGuidance}`,
+        `  doNotMention: ${input.playbook.doNotMention.join(", ")}`,
+      ].join("\n"),
+    );
+  }
+
+  if (input.diagnosticFormCta) {
+    sections.push(
+      [
+        "Diagnostic Form CTA:",
+        `  mode: ${input.diagnosticFormCta.mode}`,
+        `  short: ${input.diagnosticFormCta.short}`,
+        `  medium: ${input.diagnosticFormCta.medium}`,
+      ].join("\n"),
+    );
+  }
+
+  const userContent = sections.join("\n\n");
+
+  return callOpenAiResponsesApi({
+    envModelKey: "OPENAI_MODEL_OUTREACH",
+    systemPrompt: LLM_OUTREACH_SYSTEM_PROMPT,
+    userContent,
+    jsonSchemaName: "llm_outreach",
+    jsonSchema: LLM_OUTREACH_JSON_SCHEMA,
+    zodSchema: llmOutreachSchema,
+    apiKey: options?.apiKey,
+    fetchFn: options?.fetchFn,
+  });
+}
+
+export function mapLlmOutreachToOutreachSchema(
+  llmOutput: z.infer<typeof llmOutreachSchema>,
+): z.infer<typeof outreachSchema> {
+  return outreachSchema.parse({
+    email_subject_1: llmOutput.subject_lines[0],
+    email_subject_2: llmOutput.subject_lines[1] ?? llmOutput.subject_lines[0],
+    cold_email_short: llmOutput.shorter_email_variant,
+    cold_email_medium: llmOutput.primary_email,
+    linkedin_message_safe: llmOutput.linkedin_message,
+    follow_up_1: llmOutput.follow_up_variants[0] ?? "",
+    follow_up_2: llmOutput.follow_up_variants[1] ?? "",
+  });
+}
+
+export function buildOutreachDraftTemplate(input: {
   companyName: string;
   contactName?: string;
   pain: string;
@@ -94,6 +319,9 @@ export function buildOutreachDraft(input: {
     follow_up_2: `Happy to send over the ${input.leadMagnetTitle} if improving ${input.pain.toLowerCase()} is on your radar.`,
   });
 }
+
+/** @deprecated Use buildOutreachDraftTemplate or generateOutreachDraft */
+export const buildOutreachDraft = buildOutreachDraftTemplate;
 
 export function buildLinkedInTask(input: {
   companyName: string;

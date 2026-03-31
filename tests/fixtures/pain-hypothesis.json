@@ -1,0 +1,72 @@
+{
+  "primary_pain": "Manual patient booking process creates friction and likely costs the practice new patient appointments",
+  "secondary_pains": [
+    "No online scheduling visible on website",
+    "Contact page relies entirely on phone calls during business hours"
+  ],
+  "evidence": [
+    {
+      "source_type": "website_crawl",
+      "source_url": "https://example-dental.com/contact",
+      "snippet": "Contact page shows only a phone number and physical address with no online booking or contact form",
+      "signal_type": "missing_functionality",
+      "confidence": 0.85
+    },
+    {
+      "source_type": "website_crawl",
+      "source_url": "https://example-dental.com/about",
+      "snippet": "Team page lists 12 staff members including 3 dentists, suggesting a growing practice",
+      "signal_type": "growth_indicator",
+      "confidence": 0.7
+    }
+  ],
+  "business_impact": "Potential patients who prefer online booking are likely choosing competitors. Phone-only intake creates a bottleneck during peak hours and limits after-hours appointment requests.",
+  "confidence_score": 0.72,
+  "recommended_service_angle": "Implement a streamlined online booking system that captures after-hours appointment requests and reduces front-desk phone volume by 40%",
+  "recommended_lead_magnet_type": "booking-flow audit",
+  "insufficient_evidence": false,
+  "company_summary": "Mid-size dental practice offering general, cosmetic, and orthodontic services across two locations with a team of 12 staff.",
+  "observed_signals": [
+    {
+      "signal": "No online booking form on contact page",
+      "source": "https://example-dental.com/contact",
+      "confidence": 0.9,
+      "category": "observed"
+    },
+    {
+      "signal": "Phone-only contact method listed",
+      "source": "https://example-dental.com/contact",
+      "confidence": 0.9,
+      "category": "observed"
+    },
+    {
+      "signal": "Growing team (12 staff, 3 dentists)",
+      "source": "https://example-dental.com/about",
+      "confidence": 0.75,
+      "category": "observed"
+    }
+  ],
+  "likely_pains": [
+    {
+      "pain": "Lost appointments from patients who prefer online booking",
+      "category": "inferred",
+      "evidence_refs": ["No online booking form on contact page", "Phone-only contact method listed"]
+    },
+    {
+      "pain": "Front-desk bottleneck during peak hours",
+      "category": "inferred",
+      "evidence_refs": ["Phone-only contact method listed", "Growing team (12 staff, 3 dentists)"]
+    },
+    {
+      "pain": "Staff scheduling complexity increasing with growth",
+      "category": "speculative",
+      "evidence_refs": ["Growing team (12 staff, 3 dentists)"]
+    }
+  ],
+  "best_outreach_angle": "Highlight how a simple online booking setup could capture the after-hours appointment requests they are currently missing, with a quick audit of their current booking flow as proof of value.",
+  "caution_do_not_claim": [
+    "Do not claim they are losing a specific number or percentage of patients",
+    "Do not claim their staff is overwhelmed — this is speculative",
+    "Do not claim knowledge of their revenue or patient volume"
+  ]
+}

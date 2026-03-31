@@ -1,0 +1,16 @@
+{
+  "subject_lines": [
+    "Quick booking flow observation for Bright Smile Dental",
+    "Spotted something on your contact page"
+  ],
+  "primary_email": "Hi Sarah,\n\nI was looking at Bright Smile Dental's website and noticed your contact page directs patients to call during office hours to book appointments.\n\nFor a practice your size — 3 dentists across two locations — that likely means your front desk handles a high volume of scheduling calls, and after-hours requests may slip through.\n\nI put together a short booking flow review for your practice. It flags a couple of things that might be costing you appointments and shows what a simple fix could look like.\n\nWould it be useful if I sent it over?\n\nBest,\nLuc",
+  "shorter_email_variant": "Hi Sarah,\n\nNoticed Bright Smile Dental's booking is phone-only — for a growing multi-location practice, that can quietly cost appointments.\n\nI put together a quick booking flow review. Want me to send it?\n\nBest,\nLuc",
+  "linkedin_message": "Hi Sarah — I came across Bright Smile Dental while researching dental practices in the area. Noticed your patient booking is phone-only, which can create friction for after-hours requests. I put together a short booking flow review — happy to share if useful.",
+  "follow_up_variants": [
+    "Hi Sarah, just bumping this in case it got buried. Happy to send over the booking flow review whenever works.",
+    "Hi Sarah — I also noticed your practice added a third dentist recently. Growing teams often hit a tipping point where phone-only booking becomes a bottleneck. The review I mentioned covers exactly that. Worth a quick look?",
+    "Hi Sarah, I know inboxes get busy. If the timing isn't right, no worries at all — just didn't want the booking review to go to waste since it's specific to your practice. Either way, wishing Bright Smile continued growth."
+  ],
+  "cta": "Would it be useful if I sent it over?",
+  "rationale_for_angle": "Leading with the booking flow observation because it is directly observed (phone-only contact page) and connects to a concrete, low-effort improvement. The lead magnet (booking flow audit) provides immediate value without requiring commitment."
+}

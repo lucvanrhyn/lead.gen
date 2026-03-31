@@ -1,0 +1,35 @@
+{
+  "website_summary": "Bright Smile Dental is a multi-location dental practice offering general, cosmetic, and orthodontic services. The website emphasizes patient comfort and modern equipment but lacks online scheduling capabilities.",
+  "services_offerings": [
+    "General dentistry",
+    "Cosmetic dentistry",
+    "Orthodontics",
+    "Teeth whitening",
+    "Emergency dental care"
+  ],
+  "customer_type": "b2c",
+  "weak_lead_capture_signals": [
+    "No online booking or scheduling form",
+    "Contact page only shows phone number and address",
+    "No email capture or newsletter signup",
+    "No chatbot or live chat widget"
+  ],
+  "operational_clues": [
+    "Two physical locations listed",
+    "Team page shows 12 staff members",
+    "Office hours listed as M-F 8am-5pm only"
+  ],
+  "urgency_signals": [
+    "Recently added a third dentist to the team",
+    "Website copyright shows current year, suggesting active maintenance"
+  ],
+  "decision_maker_clues": [
+    "Practice owner Dr. James listed as lead dentist",
+    "Office manager Sarah handles administrative inquiries"
+  ],
+  "tone_brand_clues": [
+    "Warm, patient-focused messaging",
+    "Emphasis on modern technology and comfort",
+    "Professional but approachable tone"
+  ]
+}

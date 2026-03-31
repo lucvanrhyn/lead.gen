@@ -4,7 +4,9 @@ import {
   buildHubSpotContactSearchPayload,
   buildHubSpotContactUpsertPayload,
   buildHubSpotEngagementNotePayload,
+  progressHubSpotDealStage,
   syncOutreachDraftToHubSpot,
+  upsertHubSpotDeal,
 } from "@/lib/providers/hubspot/client";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -256,5 +258,164 @@ describe("syncOutreachDraftToHubSpot", () => {
     expect(fetchMock.mock.calls[7]?.[0]).toContain(
       "/crm/v4/objects/notes/note-1/associations/default/contact/contact-1",
     );
+  });
+});
+
+describe("upsertHubSpotDeal", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("creates a new deal and associates it with company and contact", async () => {
+    const fetchMock = vi
+      .fn()
+      // search for deal — not found
+      .mockResolvedValueOnce(jsonResponse({ results: [] }))
+      // create deal
+      .mockResolvedValueOnce(jsonResponse({ id: "deal-1" }))
+      // associate deal to company
+      .mockResolvedValueOnce(jsonResponse(null, 204))
+      // associate deal to contact
+      .mockResolvedValueOnce(jsonResponse(null, 204));
+
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await upsertHubSpotDeal(
+      {
+        companyName: "Atlas Dental Group",
+        companyHubSpotId: "company-1",
+        contactHubSpotId: "contact-1",
+        dealProperties: {
+          dealname: "Outreach: Atlas Dental Group",
+          dealstage: "scored",
+          pipeline: "default",
+          description: "Stage: scored",
+        },
+      },
+      {
+        env: { ...process.env, HUBSPOT_PRIVATE_APP_TOKEN: "hubspot-token" },
+      },
+    );
+
+    expect(result).toEqual({ dealId: "deal-1", created: true });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/crm/v3/objects/deals/search");
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/crm/v3/objects/deals");
+    expect(fetchMock.mock.calls[2]?.[0]).toContain(
+      "/crm/v4/objects/deal/deal-1/associations/default/company/company-1",
+    );
+    expect(fetchMock.mock.calls[3]?.[0]).toContain(
+      "/crm/v4/objects/deal/deal-1/associations/default/contact/contact-1",
+    );
+  });
+
+  it("updates an existing deal when one is found by name", async () => {
+    const fetchMock = vi
+      .fn()
+      // search for deal — found
+      .mockResolvedValueOnce(jsonResponse({ results: [{ id: "deal-existing" }] }))
+      // update deal
+      .mockResolvedValueOnce(jsonResponse({ id: "deal-existing" }))
+      // associate deal to company
+      .mockResolvedValueOnce(jsonResponse(null, 204));
+
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await upsertHubSpotDeal(
+      {
+        companyName: "Atlas Dental Group",
+        companyHubSpotId: "company-1",
+        dealProperties: {
+          dealname: "Outreach: Atlas Dental Group",
+          dealstage: "sent",
+          pipeline: "default",
+          description: "Stage: sent",
+        },
+      },
+      {
+        env: { ...process.env, HUBSPOT_PRIVATE_APP_TOKEN: "hubspot-token" },
+      },
+    );
+
+    expect(result).toEqual({ dealId: "deal-existing", created: false });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("progressHubSpotDealStage", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("returns skipped when HubSpot is not configured", async () => {
+    const result = await progressHubSpotDealStage(
+      {
+        company: { name: "Atlas Dental Group" },
+        stage: "scored",
+        context: { leadScore: 72 },
+      },
+      { env: { ...process.env, HUBSPOT_PRIVATE_APP_TOKEN: undefined } },
+    );
+
+    expect(result).toEqual({
+      skipped: true,
+      reason: "HUBSPOT_PRIVATE_APP_TOKEN is not configured.",
+    });
+  });
+
+  it("upserts company, deal, and note when configured", async () => {
+    const fetchMock = vi
+      .fn()
+      // company search — not found
+      .mockResolvedValueOnce(jsonResponse({ results: [] }))
+      // create company
+      .mockResolvedValueOnce(jsonResponse({ id: "company-1" }))
+      // deal search — not found
+      .mockResolvedValueOnce(jsonResponse({ results: [] }))
+      // create deal
+      .mockResolvedValueOnce(jsonResponse({ id: "deal-1" }))
+      // associate deal to company
+      .mockResolvedValueOnce(jsonResponse(null, 204))
+      // create note
+      .mockResolvedValueOnce(jsonResponse({ id: "note-1" }))
+      // associate note to deal
+      .mockResolvedValueOnce(jsonResponse(null, 204));
+
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await progressHubSpotDealStage(
+      {
+        company: {
+          name: "Atlas Dental Group",
+          website: "https://demo-dental.invalid",
+          normalizedDomain: "demo-dental.invalid",
+        },
+        stage: "scored",
+        context: {
+          leadScore: 72,
+          painSummary: "Relies on walk-ins",
+          confidence: 0.8,
+        },
+      },
+      {
+        env: { ...process.env, HUBSPOT_PRIVATE_APP_TOKEN: "hubspot-token" },
+        fetchImpl: fetchMock as typeof fetch,
+      },
+    );
+
+    expect(result).toMatchObject({ dealId: "deal-1", noteId: "note-1" });
+    expect(fetchMock).toHaveBeenCalledTimes(7);
   });
 });
