@@ -1,5 +1,6 @@
 import {
   ApprovalStatus,
+  CompanyStatus,
   EnrichmentStage,
   ExternalSyncStatus,
   JobStatus,
@@ -224,6 +225,26 @@ export async function runCompanyFullPipeline(companyId: string) {
       status: cascadeResult.contactsCreated > 0 ? JobStatus.SUCCEEDED : JobStatus.PARTIAL,
       error: cascadeResult.warnings.length > 0 ? cascadeResult.warnings.join("; ") : undefined,
     });
+
+    // Early abandon: if no email was found after the full cascade, archive the
+    // lead immediately. Only the phone number (if any) is kept. This avoids
+    // spending AI credits on leads we can never email.
+    const emailContacts = await db.contact.findMany({
+      where: { companyId, email: { not: null } },
+      select: { id: true },
+    });
+    if (emailContacts.length === 0) {
+      await db.company.update({
+        where: { id: companyId },
+        data: { status: CompanyStatus.ARCHIVED },
+      });
+      stages.push({
+        stage: "early_abandon",
+        status: JobStatus.PARTIAL,
+        error: "No email found after cascade — lead archived. Phone saved if available.",
+      });
+      return { status: JobStatus.PARTIAL, stages };
+    }
 
     const companyWithEvidence = await db.company.findUnique({
       where: { id: companyId },

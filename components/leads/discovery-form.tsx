@@ -2,7 +2,7 @@
 
 import { startTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { SearchCheck } from "lucide-react";
+import { SearchCheck, Trash2 } from "lucide-react";
 
 type DiscoveryState = {
   industry: string;
@@ -20,6 +20,8 @@ export function DiscoveryForm() {
   const router = useRouter();
   const [form, setForm] = useState(initialState);
   const [pending, setPending] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,13 +120,47 @@ export function DiscoveryForm() {
           />
         </label>
 
-        <button
-          className="dashboard-primary-button rounded-full px-5 py-3 text-sm font-semibold transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={pending}
-          type="submit"
-        >
-          {pending ? "Finding..." : "Find leads"}
-        </button>
+        <div className="flex items-end gap-2">
+          <button
+            className="dashboard-primary-button rounded-full px-5 py-3 text-sm font-semibold transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={pending || clearing}
+            type="submit"
+          >
+            {pending ? "Finding..." : "Find leads"}
+          </button>
+
+          <button
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-3 text-sm transition disabled:opacity-40 ${
+              confirmClear
+                ? "border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+                : "border-[rgba(22,32,51,0.12)] text-[rgba(22,32,51,0.5)] hover:bg-[rgba(22,32,51,0.06)]"
+            }`}
+            disabled={pending || clearing}
+            onClick={(e) => {
+              e.preventDefault();
+              if (!confirmClear) {
+                setConfirmClear(true);
+                return;
+              }
+              setClearing(true);
+              setConfirmClear(false);
+              setMessage(null);
+              setError(null);
+              void fetch("/api/leads/clear", { method: "POST" })
+                .then(async (res) => {
+                  if (!res.ok) throw new Error("Clear failed.");
+                  setMessage("All leads cleared.");
+                  router.refresh();
+                })
+                .catch(() => setError("Failed to clear leads."))
+                .finally(() => setClearing(false));
+            }}
+            type="button"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {clearing ? "Clearing..." : confirmClear ? "Confirm clear all" : "Clear all"}
+          </button>
+        </div>
       </div>
 
       {message ? <p className="text-sm text-[#365f46]">{message.replace("started the full pipeline", "queued the pipeline")}</p> : null}

@@ -420,6 +420,9 @@ export async function getApprovalQueue(): Promise<{
   try {
     const [drafts, engagementEvents, outreachJobs] = await Promise.all([
       db.outreachDraft.findMany({
+        where: {
+          company: { status: { not: CompanyStatus.ARCHIVED } },
+        },
         orderBy: { createdAt: "desc" },
         include: {
           company: {

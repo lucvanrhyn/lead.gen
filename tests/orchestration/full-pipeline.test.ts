@@ -1,6 +1,8 @@
 export {};
 
 const companyFindUnique = vi.fn();
+const companyUpdate = vi.fn();
+const contactFindMany = vi.fn();
 const painHypothesisFindFirst = vi.fn();
 const enrichmentJobCreate = vi.fn();
 
@@ -8,6 +10,10 @@ vi.mock("@/lib/db", () => ({
   db: {
     company: {
       findUnique: companyFindUnique,
+      update: companyUpdate,
+    },
+    contact: {
+      findMany: contactFindMany,
     },
     painHypothesis: {
       findFirst: painHypothesisFindFirst,
@@ -102,6 +108,16 @@ vi.mock("@/lib/providers/firecrawl/client", () => ({
   persistContactsFromCrawl: vi.fn(),
 }));
 
+vi.mock("@/lib/orchestration/email-cascade", () => ({
+  runEmailDiscoveryCascade: vi.fn().mockResolvedValue({
+    source: "firecrawl",
+    contacts: [],
+    contactsCreated: 0,
+    warnings: [],
+    flagForLinkedIn: false,
+  }),
+}));
+
 describe("runCompanyFullPipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -147,6 +163,7 @@ describe("runCompanyFullPipeline", () => {
       ],
       engagementEvents: [],
     });
+    contactFindMany.mockResolvedValue([{ id: "contact-1" }]);
     painHypothesisFindFirst.mockResolvedValue({ id: "pain-1" });
     extractBusinessContext.mockResolvedValue({
       website_summary: "Atlas Dental Group is a dental clinic.",
