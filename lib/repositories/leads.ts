@@ -738,7 +738,7 @@ export async function getLeadDetail(id: string): Promise<LeadDetailViewModel | n
         industry: company.industry ?? undefined,
         locationSummary: company.locationSummary ?? undefined,
         phone: company.phone ?? undefined,
-        description: company.description ?? undefined,
+        description: company.description ?? company.painHypotheses[0]?.companySummary ?? undefined,
         scoreLabel: formatScore(company.leadScores[0]?.totalScore),
         sourceConfidenceLabel: formatConfidence(company.sourceConfidence),
         manualReviewRequired: company.manualReviewRequired,

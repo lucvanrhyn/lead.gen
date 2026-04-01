@@ -76,6 +76,20 @@ export async function runCompanyFullPipeline(companyId: string) {
   const stages: StageResult[] = [];
   let apolloWarnings: string[] = [];
 
+  // Concurrency guard: atomically set status to ENRICHING, reject if already running.
+  const lockResult = await db.company.updateMany({
+    where: { id: companyId, status: { not: CompanyStatus.ENRICHING } },
+    data: { status: CompanyStatus.ENRICHING },
+  });
+
+  if (lockResult.count === 0) {
+    return {
+      status: JobStatus.PARTIAL,
+      error: "Pipeline is already running for this company.",
+      stages: [{ stage: "lock", status: JobStatus.PARTIAL, error: "Pipeline already in progress" }],
+    };
+  }
+
   try {
     const company = await db.company.findUnique({
       where: { id: companyId },
@@ -260,24 +274,21 @@ export async function runCompanyFullPipeline(companyId: string) {
       });
     }
 
-    // Early abandon: if no email was found after the full cascade, archive the
-    // lead immediately. Only the phone number (if any) is kept. This avoids
-    // spending AI credits on leads we can never email.
+    // Check if any email contacts exist after the cascade. If not, the lead
+    // still gets full AI analysis (pain hypothesis, lead magnet, LinkedIn tasks)
+    // but email outreach will be skipped. This ensures phone/LinkedIn-only leads
+    // are still actionable.
     const emailContacts = await db.contact.findMany({
       where: { companyId, email: { not: null } },
       select: { id: true },
     });
-    if (emailContacts.length === 0) {
-      await db.company.update({
-        where: { id: companyId },
-        data: { status: CompanyStatus.ARCHIVED },
-      });
+    const hasEmailContacts = emailContacts.length > 0;
+    if (!hasEmailContacts) {
       stages.push({
-        stage: "early_abandon",
+        stage: "email_status",
         status: JobStatus.PARTIAL,
-        error: "No email found after cascade — lead archived. Phone saved if available.",
+        error: "No email found — lead will be processed for LinkedIn/phone outreach only.",
       });
-      return { status: JobStatus.PARTIAL, stages };
     }
 
     const companyWithEvidence = await db.company.findUnique({
@@ -1040,5 +1051,15 @@ export async function runCompanyFullPipeline(companyId: string) {
       error: error instanceof Error ? error.message : "Full pipeline failed.",
       stages,
     };
+  } finally {
+    // Release the concurrency lock — set status to READY (or keep ARCHIVED).
+    try {
+      await db.company.updateMany({
+        where: { id: companyId, status: CompanyStatus.ENRICHING },
+        data: { status: CompanyStatus.READY },
+      });
+    } catch (unlockError) {
+      console.error("[full-pipeline] Failed to release pipeline lock:", unlockError);
+    }
   }
 }

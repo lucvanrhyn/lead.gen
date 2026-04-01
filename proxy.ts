@@ -31,7 +31,8 @@ function hasCronSecret(request: NextRequest) {
 }
 
 export function proxy(request: NextRequest) {
-  const { pathname, search } = request.nextUrl;
+  const { search } = request.nextUrl;
+  const pathname = request.nextUrl.pathname.toLowerCase();
   const session = getOperatorSessionFromCookieHeader(request.headers.get("cookie"));
 
   // Already authenticated: redirect away from login.
@@ -52,10 +53,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const requiresOperatorSession =
-    pathname === "/" || pathname.startsWith("/leads") || pathname.startsWith("/api/");
-
-  if (!requiresOperatorSession || session) {
+  // Default: protect everything that isn't public. Any new route is
+  // automatically protected — no need to maintain an allowlist.
+  if (session) {
     return NextResponse.next();
   }
 

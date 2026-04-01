@@ -2,6 +2,7 @@ export {};
 
 const companyFindUnique = vi.fn();
 const companyUpdate = vi.fn();
+const companyUpdateMany = vi.fn();
 const contactFindMany = vi.fn();
 const painHypothesisFindFirst = vi.fn();
 const enrichmentJobCreate = vi.fn();
@@ -11,6 +12,7 @@ vi.mock("@/lib/db", () => ({
     company: {
       findUnique: companyFindUnique,
       update: companyUpdate,
+      updateMany: companyUpdateMany,
     },
     contact: {
       findMany: contactFindMany,
@@ -141,6 +143,9 @@ vi.mock("@/lib/orchestration/email-cascade", () => ({
 describe("runCompanyFullPipeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Concurrency lock: allow pipeline to proceed
+    companyUpdateMany.mockResolvedValue({ count: 1 });
 
     companyFindUnique.mockResolvedValue({
       id: "company-1",
