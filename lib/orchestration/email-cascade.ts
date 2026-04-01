@@ -184,7 +184,8 @@ export async function runEmailDiscoveryCascade(
             }
             warnings.push("Hunter pattern found but no verified emails generated");
           }
-        } catch {
+        } catch (error) {
+          console.error("[email-cascade] Hunter domain search failed:", error);
           warnings.push("Hunter domain search failed");
         }
       } else {

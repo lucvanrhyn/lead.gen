@@ -52,7 +52,7 @@ export function hasValidOperatorCredentials(
     return false;
   }
 
-  return configuredEmail === email.trim() && configuredPassword === password;
+  return equalSignatures(configuredEmail, email.trim()) && equalSignatures(configuredPassword, password);
 }
 
 export function createOperatorSessionToken(

@@ -34,6 +34,7 @@ vi.mock("@/lib/db", () => ({
     },
     enrichmentJob: {
       create: enrichmentJobCreate,
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   },
 }));

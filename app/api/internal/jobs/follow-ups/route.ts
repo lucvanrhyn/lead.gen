@@ -81,7 +81,8 @@ export async function GET(request: Request) {
       });
 
       results.processed += 1;
-    } catch {
+    } catch (error) {
+      console.error(`[follow-ups] Failed to generate follow-up for draft ${draft.id}:`, error);
       results.errors += 1;
     }
   }

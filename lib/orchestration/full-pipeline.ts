@@ -76,6 +76,45 @@ export async function runCompanyFullPipeline(companyId: string) {
   const stages: StageResult[] = [];
   let apolloWarnings: string[] = [];
 
+  // Stale lock recovery: if a company has been ENRICHING for >15 minutes,
+  // the previous run likely crashed. Force-release the lock.
+  const STALE_LOCK_THRESHOLD_MS = 15 * 60 * 1000;
+  await db.company.updateMany({
+    where: {
+      id: companyId,
+      status: CompanyStatus.ENRICHING,
+      updatedAt: { lt: new Date(Date.now() - STALE_LOCK_THRESHOLD_MS) },
+    },
+    data: { status: CompanyStatus.READY },
+  });
+
+  // Stale enrichment job recovery: mark jobs stuck in RUNNING for >15 min as FAILED.
+  const STALE_JOB_THRESHOLD_MS = 15 * 60 * 1000;
+  await db.enrichmentJob.updateMany({
+    where: {
+      companyId,
+      status: JobStatus.RUNNING,
+      updatedAt: { lt: new Date(Date.now() - STALE_JOB_THRESHOLD_MS) },
+    },
+    data: {
+      status: JobStatus.FAILED,
+      lastError: "Job timed out — marked as failed by stale job recovery.",
+    },
+  });
+
+  // Stale enrichment job recovery: mark jobs stuck in PENDING for >15 min as FAILED.
+  await db.enrichmentJob.updateMany({
+    where: {
+      companyId,
+      status: JobStatus.PENDING,
+      updatedAt: { lt: new Date(Date.now() - STALE_JOB_THRESHOLD_MS) },
+    },
+    data: {
+      status: JobStatus.FAILED,
+      lastError: "Job timed out while pending — marked as failed by stale job recovery.",
+    },
+  });
+
   // Concurrency guard: atomically set status to ENRICHING, reject if already running.
   const lockResult = await db.company.updateMany({
     where: { id: companyId, status: { not: CompanyStatus.ENRICHING } },
@@ -738,11 +777,13 @@ export async function runCompanyFullPipeline(companyId: string) {
       });
     }
 
-    const contacts = companyWithEvidence.contacts.filter((contact) => Boolean(contact.email));
+    const contacts = companyWithEvidence.contacts.filter(
+      (contact) => Boolean(contact.email) || Boolean(contact.phone),
+    );
 
     if (contacts.length === 0) {
       const noContactsReason =
-        apolloWarnings[0] ?? "No valid contacts with email were available for draft generation.";
+        apolloWarnings[0] ?? "No valid contacts with email or phone were available for draft generation.";
 
       await db.enrichmentJob.create({
         data: {

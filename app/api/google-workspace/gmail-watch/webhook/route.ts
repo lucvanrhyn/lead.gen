@@ -208,8 +208,9 @@ export async function POST(request: Request) {
               replyDraft,
             });
           }
-        } catch {
+        } catch (error) {
           // Reply classification is advisory — don't fail the webhook
+          console.warn(`[gmail-webhook] Reply classification failed for draft ${draft.id}:`, error);
         }
       }
     }

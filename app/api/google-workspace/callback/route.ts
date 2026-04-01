@@ -71,8 +71,9 @@ async function persistWorkspaceError(message: string) {
         lastError: message,
       },
     });
-  } catch {
+  } catch (error) {
     // Best effort only. Redirecting the operator back with context is more important than failing here.
+    console.warn("[google-workspace-callback] Failed to persist workspace error:", error);
   }
 }
 

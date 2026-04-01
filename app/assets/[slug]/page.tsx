@@ -132,16 +132,16 @@ export default async function AssetPage({
   });
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(139,105,20,0.14),_transparent_38%),linear-gradient(180deg,_#16110c_0%,_#0f0c09_100%)] px-6 py-10 text-cream sm:px-10 lg:px-12">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(139,105,20,0.14),_transparent_38%),linear-gradient(180deg,_#16110c_0%,_#0f0c09_100%)] px-6 py-10 text-[#f5ebd4] sm:px-10 lg:px-12">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <section className="rounded-[2.5rem] border border-[rgba(210,180,140,0.14)] bg-[rgba(26,21,16,0.94)] p-8 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-          <p className="font-serif text-xs uppercase tracking-[0.24em] text-tan">
+          <p className="font-serif text-xs uppercase tracking-[0.24em] text-[#d2b48c]">
             Hosted lead magnet
           </p>
-          <h1 className="mt-4 font-display text-4xl leading-tight text-cream sm:text-5xl">
+          <h1 className="mt-4 font-display text-4xl leading-tight text-[#f5ebd4] sm:text-5xl">
             {asset.headline}
           </h1>
-          <p className="mt-4 max-w-3xl text-base leading-8 text-[rgba(245,235,212,0.76)]">
+          <p className="mt-4 max-w-3xl text-base leading-8 text-[rgba(245,235,212,0.85)]">
             {asset.intro}
           </p>
           <div className="mt-6 flex flex-wrap gap-3 text-sm text-[rgba(245,235,212,0.72)]">
@@ -159,10 +159,10 @@ export default async function AssetPage({
 
         <section className="grid gap-5 lg:grid-cols-[1.4fr_0.6fr]">
           <article className="rounded-[2rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(26,21,16,0.92)] p-7">
-            <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+            <p className="font-serif text-xs uppercase tracking-[0.22em] text-[#d2b48c]">
               What this page is for
             </p>
-            <div className="mt-4 space-y-4 text-sm leading-7 text-[rgba(245,235,212,0.74)]">
+            <div className="mt-4 space-y-4 text-sm leading-7 text-[rgba(245,235,212,0.85)]">
               <p>
                 This asset is the same link used in outreach, so every view rolls back to the
                 original outreach draft instead of a separate tracking page.
@@ -176,7 +176,7 @@ export default async function AssetPage({
             <div className="mt-7 flex flex-wrap gap-3">
               {asset.outreachDraft.contact?.email ? (
                 <Link
-                  className="rounded-full bg-cream px-5 py-3 text-sm font-semibold text-[#120f0c]"
+                  className="rounded-full bg-[#f5ebd4] px-5 py-3 text-sm font-semibold text-[#120f0c]"
                   href={`mailto:${asset.outreachDraft.contact.email}?subject=${encodeURIComponent(asset.headline)}`}
                 >
                   Request a tailored version
@@ -184,7 +184,7 @@ export default async function AssetPage({
               ) : null}
               {asset.diagnosticFormUrl ? (
                 <Link
-                  className="rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm text-cream"
+                  className="rounded-full border border-[rgba(210,180,140,0.16)] px-5 py-3 text-sm text-[#f5ebd4]"
                   href={asset.diagnosticFormUrl}
                 >
                   Open the diagnostic
@@ -194,25 +194,25 @@ export default async function AssetPage({
           </article>
 
           <aside className="rounded-[2rem] border border-[rgba(210,180,140,0.12)] bg-[rgba(255,255,255,0.03)] p-7">
-            <p className="font-serif text-xs uppercase tracking-[0.22em] text-tan">
+            <p className="font-serif text-xs uppercase tracking-[0.22em] text-[#d2b48c]">
               Attribution
             </p>
-            <dl className="mt-4 space-y-4 text-sm text-[rgba(245,235,212,0.74)]">
+            <dl className="mt-4 space-y-4 text-sm text-[rgba(245,235,212,0.85)]">
               <div>
-                <dt className="text-[rgba(245,235,212,0.58)]">Asset slug</dt>
-                <dd className="mt-1 break-all text-cream">{asset.slug}</dd>
+                <dt className="text-[rgba(245,235,212,0.70)]">Asset slug</dt>
+                <dd className="mt-1 break-all text-[#f5ebd4]">{asset.slug}</dd>
               </div>
               <div>
-                <dt className="text-[rgba(245,235,212,0.58)]">Lead</dt>
-                <dd className="mt-1 text-cream">{asset.company.name}</dd>
+                <dt className="text-[rgba(245,235,212,0.70)]">Lead</dt>
+                <dd className="mt-1 text-[#f5ebd4]">{asset.company.name}</dd>
               </div>
               <div>
-                <dt className="text-[rgba(245,235,212,0.58)]">Original draft</dt>
-                <dd className="mt-1 text-cream">{asset.outreachDraft.id}</dd>
+                <dt className="text-[rgba(245,235,212,0.70)]">Original draft</dt>
+                <dd className="mt-1 text-[#f5ebd4]">{asset.outreachDraft.id}</dd>
               </div>
               <div>
-                <dt className="text-[rgba(245,235,212,0.58)]">Follow-up status</dt>
-                <dd className="mt-1 text-cream">
+                <dt className="text-[rgba(245,235,212,0.70)]">Follow-up status</dt>
+                <dd className="mt-1 text-[#f5ebd4]">
                   {asset.followUpCreatedAt ? "Locked after first high-intent view" : "Ready"}
                 </dd>
               </div>
